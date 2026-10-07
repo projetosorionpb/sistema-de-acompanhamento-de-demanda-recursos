@@ -14,6 +14,7 @@
     result: null, // {cong, soSiate, soList, log}
     view: 'caixa', search: '', statusFilter: 'TODOS',
     cf: { reg: '', codserv: '', cidade: '', dini: '', dfim: '', resp: '' }, // filtros da caixa
+    qf: { origem: '', codserv: '' }, // filtros da quarentena
     pagePrincipal: 1, pageQuar: 1,
     isAdmin: false, user: null,
     codservOptions: [],
@@ -399,11 +400,76 @@
   }
   function filteredQuar(db) {
     var q = state.search.trim().toUpperCase();
+    var qf = state.qf;
     return db.quarentena.filter(function (x) {
+      if (qf.origem && x.origem !== qf.origem) return false;
+      if (qf.codserv && String(qget(x, 'c') || '') !== qf.codserv) return false;
       if (!q) return true;
       return String(x.numos).indexOf(q) !== -1 ||
         String(qget(x, 'cli') || qget(x, 'cid') || qget(x, 'loc') || '').toUpperCase().indexOf(q) !== -1;
     });
+  }
+
+  // ---------- exportar quarentena (sempre o FILTRADO) ----------
+  var QEXP_COLS = ['NUMOS', 'ORIGEM', 'CODSERV', 'DATA_SOL', 'REGIONAL', 'CIDADE_LOCAL', 'CLIENTE', 'TELEFONE', 'DETALHE', 'MOTIVO'];
+  function quarToRows(list) {
+    return list.map(function (x) {
+      var isS = x.origem === 'SO_SIATE';
+      var legacy = x.dados || {};
+      return {
+        NUMOS: x.numos,
+        ORIGEM: x.origem,
+        CODSERV: qget(x, 'c'),
+        DATA_SOL: qget(x, 'd'),
+        REGIONAL: qget(x, 'r'),
+        CIDADE_LOCAL: qget(x, 'cid') || qget(x, 'loc'),
+        CLIENTE: qget(x, 'cli'),
+        TELEFONE: qget(x, 't') || legacy.telefone || '',
+        DETALHE: qget(x, 'desc'),
+        MOTIVO: x.motivo || (isS ? 'Tem na SIATE e não tem na LIST' : 'Tem na LIST e não tem na SIATE'),
+      };
+    });
+  }
+  function qexpName(ext) {
+    var d = new Date(), p = function (n) { return String(n).padStart(2, '0'); };
+    var suf = [];
+    if (state.qf.origem) suf.push(state.qf.origem === 'SO_SIATE' ? 'so-siate' : 'so-list');
+    if (state.qf.codserv) suf.push('serv' + state.qf.codserv);
+    if (state.search.trim()) suf.push('busca');
+    return 'quarentena_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+      (suf.length ? '_' + suf.join('_') : '') + '.' + ext;
+  }
+  function downloadBlob(blob, name) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+  function exportQuarCSV() {
+    var rows = quarToRows(filteredQuar(loadDB()));
+    if (!rows.length) { alert('Nada para exportar com os filtros atuais.'); return; }
+    function cell(v) {
+      v = String(v == null ? '' : v);
+      return (/[";\n\r]/.test(v)) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    }
+    var txt = '\uFEFF' + QEXP_COLS.join(';') + '\r\n' +      rows.map(function (r) { return QEXP_COLS.map(function (c) { return cell(r[c]); }).join(';'); }).join('\r\n');
+    downloadBlob(new Blob([txt], { type: 'text/csv;charset=utf-8' }), qexpName('csv'));
+  }
+  function exportQuarXLSX() {
+    var rows = quarToRows(filteredQuar(loadDB()));
+    if (!rows.length) { alert('Nada para exportar com os filtros atuais.'); return; }
+    try {
+      var ws = XLSX.utils.json_to_sheet(rows, { header: QEXP_COLS });
+      ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 9 }, { wch: 12 }, { wch: 9 }, { wch: 22 }, { wch: 28 }, { wch: 14 }, { wch: 30 }, { wch: 34 }];
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Quarentena');
+      XLSX.writeFile(wb, qexpName('xlsx'));
+    } catch (e) {
+      console.error(e);
+      alert('Falha ao gerar XLSX. Tente o CSV.');
+    }
   }
 
   function renderStats() {
@@ -543,6 +609,19 @@
     el.innerHTML = h + '</tbody></table></div>';
   }
 
+  // ---------- filtros + export da quarentena ----------
+  function populateQuarFilters(db) {
+    var sel = $('f3-codserv');
+    if (!sel) return;
+    var cs = {};
+    db.quarentena.forEach(function (x) { var c = qget(x, 'c'); if (c) cs[c] = 1; });
+    var cur = state.qf.codserv;
+    sel.innerHTML = '<option value="">Todos</option>' + Object.keys(cs).sort().map(function (c) {
+      return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+    }).join('');
+    sel.value = cur;
+  }
+
   // ---------- filtros da caixa ----------
   function f2Count() {
     var n = 0, cf = state.cf;
@@ -602,6 +681,7 @@
   function renderAll(msg) {
     var db = loadDB();
     populateCaixaFilters(db);
+    populateQuarFilters(db);
     renderTables(msg);
     document.querySelectorAll('.chip[data-st]').forEach(function (c) {
       c.classList.toggle('active', c.getAttribute('data-st') === state.statusFilter);
@@ -658,6 +738,24 @@
       try { localStorage.setItem('sad-f2-open', open ? '0' : '1'); } catch (e) {}
       syncF2Toggle();
     });
+
+    // filtros da quarentena (origem + serviço)
+    ['f3-origem', 'f3-codserv'].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      el.addEventListener('change', function () {
+        state.qf = {
+          origem: ($('f3-origem') || {}).value || '',
+          codserv: ($('f3-codserv') || {}).value || '',
+        };
+        state.pageQuar = 1;
+        renderAll();
+      });
+    });
+    var ex1 = $('btn-exp-csv');
+    if (ex1) ex1.addEventListener('click', exportQuarCSV);
+    var ex2 = $('btn-exp-xlsx');
+    if (ex2) ex2.addEventListener('click', exportQuarXLSX);
 
     document.addEventListener('click', function (e) {
       var pg = e.target.getAttribute && e.target.getAttribute('data-pg');

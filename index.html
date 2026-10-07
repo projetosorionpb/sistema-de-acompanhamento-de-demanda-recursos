@@ -230,6 +230,27 @@
 
       <!-- ═══ VIEW: QUARENTENA (admin) ═══ -->
       <section id="view-quarentena" style="display:none">
+        <div class="panel panel-slim">
+          <div class="panel-body">
+            <div class="filter-grid">
+              <div class="field">
+                <label>Origem</label>
+                <select id="f3-origem"><option value="">Todas</option><option value="SO_SIATE">Só SIATE</option><option value="SO_LIST">Só LIST</option></select>
+              </div>
+              <div class="field">
+                <label>Serviço</label>
+                <select id="f3-codserv"><option value="">Todos</option></select>
+              </div>
+              <div class="field">
+                <label>Exportar filtrado</label>
+                <div style="display:flex;gap:8px">
+                  <button class="btn-ghost" id="btn-exp-csv" style="padding:8px 14px;font-size:12px;flex:1">⬇ CSV</button>
+                  <button class="btn-ghost" id="btn-exp-xlsx" style="padding:8px 14px;font-size:12px;flex:1">⬇ XLSX</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="panel">
           <div class="panel-header">
             <div class="panel-icon">🛡️</div>
