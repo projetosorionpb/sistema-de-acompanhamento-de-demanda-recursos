@@ -229,43 +229,78 @@
     return { cong: cong, soSiate: soSiate, soList: soList };
   }
 
-  // ---------- filtros pré-banco ----------
+  // ---------- filtros pré-banco (recortam AS DUAS BASES antes de comparar) ----------
+  // Modelo: como se filtrasse as planilhas e apagasse o resto — só o
+  // universo filtrado é comparado e vai para o banco (caixa + quarentena).
   function currentFilters() {
     var regs = [];
     document.querySelectorAll('.check-pill input:checked').forEach(function (i) { regs.push(i.value); });
     return {
-      regs: regs, // ['1','2','3'] — vazio = todos
+      regs: regs, // 3 marcadas (ou nenhuma) = todas
       codserv: ($('f-codserv') || {}).value || '',
       cidade: ((($('f-cidade') || {}).value) || '').toUpperCase().trim(),
       dIni: (($('f-dini') || {}).value) || '',
       dFim: (($('f-dfim') || {}).value) || '',
     };
   }
+  function brToISO(s) {
+    s = String(s || '').trim();
+    var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (m) {
+      var dd = m[1].padStart(2, '0'), mm = m[2].padStart(2, '0'), yy = m[3];
+      if (yy.length === 2) yy = '20' + yy;
+      return yy + '-' + mm + '-' + dd;
+    }
+    m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return m[1] + '-' + m[2] + '-' + m[3];
+    return '';
+  }
+  function rowReg(r) {
+    var v = (r.codreg !== undefined && r.codreg !== '' && r.codreg !== null) ? r.codreg : (r.regional || '');
+    v = String(v).trim().toUpperCase();
+    if (v === 'LESTE') return '1'; // LIST mistura 1/2/3 com nomes
+    if (v === 'CENTRO') return '2';
+    if (v === 'OESTE') return '3';
+    return v;
+  }
+  function rowCid(r) {
+    var v = (r.cidade !== undefined) ? r.cidade : (r.local || '');
+    return String(v || '').toUpperCase();
+  }
+  function rowISO(r) { return r.dataISO || brToISO(r.solicitacao); }
   function applyFilters(rows, f) {
+    var regAll = f.regs.length === 0 || f.regs.length >= 3; // tudo marcado = sem filtro
     return rows.filter(function (r) {
-      if (f.regs.length && f.regs.indexOf(String(r.codreg)) === -1) return false;
-      if (f.codserv && String(r.codserv) !== String(f.codserv)) return false;
-      if (f.cidade && String(r.cidade || '').toUpperCase().indexOf(f.cidade) === -1) return false;
-      if ((f.dIni || f.dFim) && r.dataISO) {
-        if (f.dIni && r.dataISO < f.dIni) return false;
-        if (f.dFim && r.dataISO > f.dFim) return false;
+      if (!regAll && f.regs.indexOf(rowReg(r)) === -1) return false;
+      if (f.codserv && String(r.codserv || '') !== String(f.codserv)) return false;
+      if (f.cidade && rowCid(r).indexOf(f.cidade) === -1) return false;
+      var iso = rowISO(r);
+      if ((f.dIni || f.dFim) && iso) {
+        if (f.dIni && iso < f.dIni) return false;
+        if (f.dFim && iso > f.dFim) return false;
       }
       return true;
     });
   }
-
-  // ---------- jogar no banco ----------
-  function pushToDB() {
-    if (!state.result) return;
+  function filteredUniverse() {
     var f = currentFilters();
-    var congF = applyFilters(state.result.cong, f);
+    return { f: f, siate: applyFilters(state.siateClean, f), list: applyFilters(state.listClean, f) };
+  }
+
+  // ---------- jogar no banco (universo já filtrado nas 2 bases) ----------
+  function pushToDB() {
+    if (!state.siateClean.length || !state.listClean.length) { alert('Suba as duas bases e compare primeiro.'); return; }
+    var u = filteredUniverse();
+    var cmp = compare(u.siate, u.list);
+    state.result = cmp;
+    var f = u.f;
     var db = loadDB();
     var haveP = {}, haveQ = {};
     db.principal.forEach(function (p) { haveP[p.numos] = 1; });
     db.quarentena.forEach(function (q) { haveQ[q.numos + '|' + q.origem] = 1; });
 
     var newP = 0;
-    congF.forEach(function (s) {
+    cmp.cong.forEach(function (s) {
       if (haveP[s.numos]) return;
       db.principal.push({
         numos: s.numos, codserv: s.codserv, datasol: s.datasol, dataISO: s.dataISO,
@@ -277,19 +312,19 @@
       newP++;
     });
     var newQ = 0;
-    state.result.soSiate.forEach(function (s) {
+    cmp.soSiate.forEach(function (s) {
       var key = s.numos + '|SO_SIATE';
       if (haveQ[key]) return;
       db.quarentena.push({ numos: s.numos, origem: 'SO_SIATE', d: compactQ(s, 'SO_SIATE'), createdAt: new Date().toISOString() });
       newQ++;
     });
-    state.result.soList.forEach(function (l) {
+    cmp.soList.forEach(function (l) {
       var key = l.numos + '|SO_LIST';
       if (haveQ[key]) return;
       db.quarentena.push({ numos: l.numos, origem: 'SO_LIST', d: compactQ(l, 'SO_LIST'), createdAt: new Date().toISOString() });
       newQ++;
     });
-    db.imports.push({ ts: new Date().toISOString(), filtros: f, congTotal: state.result.cong.length, congGravadas: newQ >= 0 ? congF.length : 0, novasPrincipal: newP, novasQuarentena: newQ });
+    db.imports.push({ ts: new Date().toISOString(), filtros: f, siateFiltrada: u.siate.length, listFiltrada: u.list.length, congTotal: cmp.cong.length, novasPrincipal: newP, novasQuarentena: newQ });
     if (!saveDB(db)) {
       var kb = 0;
       try { kb = Math.round(JSON.stringify(db).length / 1024); } catch (e) {}
@@ -297,7 +332,7 @@
       alert('NÃO SALVOU: banco local cheio (quota ~5MB; tentativa com aprox. ' + kb + 'KB). Nada foi gravado.\n\nSaídas:\n1) Jogue em partes usando filtros (ex: 1 regional por vez);\n2) Migre para o Supabase (docs/SUPABASE_SCHEMA.sql).');
       return;
     }
-    renderAll('Banco atualizado: +' + newP + ' na caixa principal, +' + newQ + ' na quarentena (filtros aplicados só na principal).');
+    renderAll('Banco atualizado: +' + newP + ' na caixa principal, +' + newQ + ' na quarentena (universo filtrado: SIATE ' + u.siate.length + ', LIST ' + u.list.length + ').');
   }
 
   // ---------- render ----------
@@ -599,18 +634,21 @@
 
   function processAndPreview() {
     if (!state.siateClean.length || !state.listClean.length) { alert('Suba as duas bases primeiro.'); return; }
-    var cmp = compare(state.siateClean, state.listClean);
+    var u = filteredUniverse();
+    var cmp = compare(u.siate, u.list);
     state.result = cmp;
-    var f = currentFilters();
-    var congF = applyFilters(cmp.cong, f);
+    var f = u.f;
     var lines = [];
-    lines.push('COMPARAÇÃO POR NUMOS (exato):');
-    lines.push('- Congruentes (nas 2 bases): ' + cmp.cong.length + ' → após filtros: ' + congF.length);
+    lines.push('FILTROS RECORTARAM AS DUAS BASES (resto descartado):');
+    lines.push('- SIATE: ' + u.siate.length + ' de ' + state.siateClean.length + ' | LIST: ' + u.list.length + ' de ' + state.listClean.length);
+    lines.push('COMPARAÇÃO POR NUMOS (exato) no universo filtrado:');
+    lines.push('- Congruentes: ' + cmp.cong.length + ' → caixa principal');
     lines.push('- Só SIATE: ' + cmp.soSiate.length + ' → quarentena');
     lines.push('- Só LIST: ' + cmp.soList.length + ' → quarentena');
-    lines.push('Filtros atuais: regional=' + (f.regs.join(',') || 'todas') + ' | codserv=' + (f.codserv || 'todos') + ' | cidade=' + (f.cidade || 'todas') + ' | período=' + (f.dIni || '…') + '→' + (f.dFim || '…'));
+    lines.push('Filtros: regional=' + (f.regs.join(',') || 'todas') + ' | codserv=' + (f.codserv || 'todos') + ' | cidade=' + (f.cidade || 'todas') + ' | período=' + (f.dIni || '…') + '→' + (f.dFim || '…'));
     $('log').textContent = lines.join('\n');
-    $('alert').innerHTML = '✔ <b>' + congF.length + '</b> congruentes prontas p/ caixa principal &nbsp;•&nbsp; ⚠ <b>' + (cmp.soSiate.length + cmp.soList.length) + '</b> divergentes irão p/ quarentena. <br>Confira os filtros e clique em <b>“Jogar no banco”</b>.';
+    $('alert').style.display = '';
+    $('alert').innerHTML = '✔ <b>' + cmp.cong.length + '</b> congruentes p/ caixa principal &nbsp;•&nbsp; ⚠ <b>' + (cmp.soSiate.length + cmp.soList.length) + '</b> divergentes p/ quarentena (tudo do universo filtrado). <br>Confira e clique em <b>“Jogar no banco”</b>.';
     $('alert').className = 'alert-box green';
     renderStats();
   }
