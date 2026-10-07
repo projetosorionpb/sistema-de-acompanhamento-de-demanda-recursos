@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acompanhamento de Demanda</title>
+<meta name="theme-color" content="#0d1117">
+<script>
+  try {
+    var _t = localStorage.getItem('sad-theme');
+    if (_t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch (e) {}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/theme.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="logo-wrap">
+    <div class="logo-img" style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#f0a500,#ff6b35);display:flex;align-items:center;justify-content:center;font-size:22px">⚡</div>
+    <div class="logo-text">
+      <div class="logo-title">ACOMPANHAMENTO DE DEMANDA <span class="logo-badge">ORION-PB</span></div>
+      <div class="subtitle">Conciliação SIATE × LIST • NUMOS exato • Quarentena + Caixa principal</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span class="user-badge" id="me">…</span>
+    <button class="theme-toggle" data-theme-toggle aria-label="Alternar tema"><span class="icon-moon">🌙</span><span class="icon-sun">☀️</span></button>
+    <button class="btn-signout" onclick="signOut()">Sair ↗</button>
+    <div class="count-badge" id="count-badge">…</div>
+  </div>
+</header>
+
+<div class="main">
+
+  <div class="panel" id="not-admin" style="display:none">
+    <div class="panel-body">
+      <div class="alert-box">👋 Você está como <b>usuário</b>. A importação das bases é feita pelo <b>admin</b>. Use a <b>Caixa principal</b> abaixo para pegar demandas e atualizar o status.</div>
+    </div>
+  </div>
+
+  <!-- UPLOAD (admin) -->
+  <div class="panel" id="panel-upload">
+    <div class="panel-header">
+      <div class="panel-icon">📤</div>
+      <div>
+        <div class="panel-title">1 · Subir bases (admin)</div>
+        <div class="panel-subtitle">SIATE = LISTA OS (.xls) · LIST = Gerenciador de Obras (.csv) · comparação pelo NUMOS exato</div>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="upload-grid">
+        <div class="upload-box" id="box-si">
+          <label>🔶 Base SIATE — LISTA OS (.xls / .xlsx)</label>
+          <input type="file" id="file-si" accept=".xls,.xlsx,.csv">
+          <div class="upload-status" id="st-file-si">Nenhum arquivo.</div>
+        </div>
+        <div class="upload-box" id="box-li">
+          <label>🔷 Base LIST — Gerenciador de Obras (.csv / .xls)</label>
+          <input type="file" id="file-li" accept=".csv,.xls,.xlsx">
+          <div class="upload-status" id="st-file-li">Nenhum arquivo.</div>
+        </div>
+      </div>
+      <div class="panel-hint">Sanitização SIATE: NUMOS só-dígitos (chave), CODSERV inteiro, DATASOL→ISO, CODREG 1=LESTE 2=CENTRO 3=OESTE, textos trim/upper, telefones só-dígitos, remove sem-NUMOS e duplicadas. LIST: OS normalizada, remove vazias/duplicadas.</div>
+    </div>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="panel" id="panel-upload2">
+    <div class="panel-header">
+      <div class="panel-icon">🎛️</div>
+      <div>
+        <div class="panel-title">2 · Filtros antes de jogar no banco</div>
+        <div class="panel-subtitle">O sistema pergunta se quer filtrar por algo antes de gravar (vale p/ caixa principal; quarentena recebe tudo)</div>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="filter-grid">
+        <div class="field">
+          <label>Regional (CODREG)</label>
+          <div class="check-row">
+            <label class="check-pill on"><input type="checkbox" value="1" checked>1·LESTE</label>
+            <label class="check-pill on"><input type="checkbox" value="2" checked>2·CENTRO</label>
+            <label class="check-pill on"><input type="checkbox" value="3" checked>3·OESTE</label>
+          </div>
+        </div>
+        <div class="field">
+          <label>Código de serviço</label>
+          <select id="f-codserv"><option value="">Todos</option></select>
+        </div>
+        <div class="field">
+          <label>Cidade (contém)</label>
+          <input type="text" id="f-cidade" placeholder="Ex: JOAO PESSOA">
+        </div>
+        <div class="field">
+          <label>Data sol — início</label>
+          <input type="date" id="f-dini">
+        </div>
+        <div class="field">
+          <label>Data sol — fim</label>
+          <input type="date" id="f-dfim">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-process" disabled>⚙️ Comparar bases</button>
+        <button class="btn-ghost" id="btn-tobank">💾 Jogar no banco</button>
+        <button class="btn-ghost" id="btn-clear">🧹 Limpar banco local</button>
+      </div>
+      <div class="alert-box" id="alert" style="display:none"></div>
+      <div class="log-box" id="log">Aguardando arquivos…</div>
+    </div>
+  </div>
+
+  <!-- RESUMO -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-icon">📊</div>
+      <div>
+        <div class="panel-title">Resumo</div>
+        <div class="panel-subtitle" id="result-msg">Nada processado ainda.</div>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="stats-grid">
+        <div class="stat-box"><div class="slabel">SIATE válidas</div><div class="svalue" id="st-si">0</div></div>
+        <div class="stat-box"><div class="slabel">LIST válidas</div><div class="svalue" id="st-li">0</div></div>
+        <div class="stat-box"><div class="slabel">Congruentes</div><div class="svalue" id="st-ok" style="color:var(--green)">0</div><div class="ssub">→ caixa principal</div></div>
+        <div class="stat-box"><div class="slabel">Só SIATE</div><div class="svalue" id="st-ssi" style="color:var(--yellow)">0</div><div class="ssub">→ quarentena</div></div>
+        <div class="stat-box"><div class="slabel">Só LIST</div><div class="svalue" id="st-sli" style="color:var(--red)">0</div><div class="ssub">→ quarentena</div></div>
+        <div class="stat-box"><div class="slabel">No banco · principal</div><div class="svalue" id="st-p">0</div></div>
+        <div class="stat-box"><div class="slabel">No banco · quarentena</div><div class="svalue" id="st-q">0</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="principal">📥 Caixa principal <span class="n" id="tab-n-p">0</span></button>
+    <button class="tab-btn" data-tab="quarentena">🛡️ Quarentena <span class="n" id="tab-n-q">0</span></button>
+  </div>
+
+  <div class="search-bar">
+    <div class="search-input-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="q" placeholder="Buscar por NUM OS, cliente, cidade, codserv…" autocomplete="off">
+    </div>
+    <button class="search-btn" id="btn-search">Buscar</button>
+  </div>
+
+  <div id="view-principal">
+    <div class="status-filter">
+      <span class="chip active" data-st="TODOS">TODOS</span>
+      <span class="chip" data-st="A INICIAR">A INICIAR</span>
+      <span class="chip" data-st="EM ANDAMENTO">EM ANDAMENTO</span>
+      <span class="chip" data-st="PENDENTE">PENDENTE</span>
+      <span class="chip" data-st="ENCERRADO">ENCERRADO</span>
+    </div>
+    <div class="panel"><div class="panel-body" id="tbl-principal"></div></div>
+  </div>
+
+  <div id="view-quarentena" style="display:none">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-icon">🛡️</div>
+        <div>
+          <div class="panel-title">Quarentena — divergências</div>
+          <div class="panel-subtitle">Tem em uma base e não tem na outra · admin aprova (→ caixa) ou reprova</div>
+        </div>
+      </div>
+      <div class="panel-body" id="tbl-quarentena"></div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="site-footer">Feito por <strong>Valdeci Nunes</strong></footer>
+
+<script src="js/app.js"></script>
+</body>
+</html>
