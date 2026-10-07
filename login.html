@@ -3,42 +3,46 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0d1117">
+<meta name="theme-color" content="#0b0e13">
 <script>
   try {
     var _t = localStorage.getItem('sad-theme');
     if (_t === 'light') document.documentElement.setAttribute('data-theme', 'light');
   } catch (e) {}
 </script>
-<title>Login — Acompanhamento de Demanda</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<title>Entrar — Acompanhamento de Demanda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:#30363d;--accent:#f0a500;--text:#e6edf3;--text2:#8b949e;--red:#f85149;color-scheme:dark}
-[data-theme="light"]{--bg:#f6f8fa;--surface:#fff;--surface2:#eaeef2;--border:#d0d7de;--accent:#d97706;--text:#1f2328;--text2:#656d76;color-scheme:light}
+:root{--bg:#0b0e13;--surface:#12161d;--surface2:#181e27;--input:#0e1218;--border:#232b36;--accent:#f5a524;--accent-ink:#1a1206;--accent-soft:rgba(245,165,36,.12);--text:#e8edf3;--text2:#8d97a5;--red:#f2555a;color-scheme:dark}
+[data-theme="light"]{--bg:#f4f6f9;--surface:#fff;--surface2:#f1f4f8;--input:#fff;--border:#e3e8ef;--accent:#d97706;--accent-ink:#fff;--accent-soft:rgba(217,119,6,.1);--text:#131a24;--text2:#5b6675;--red:#dc2626;color-scheme:light}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.theme-toggle-floating{position:fixed;top:16px;right:16px;background:var(--surface);border:1px solid var(--border);color:var(--text2);border-radius:8px;width:38px;height:38px;cursor:pointer;font-size:16px}
+body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,'Segoe UI',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(600px 300px at 50% -80px,var(--accent-soft),transparent);pointer-events:none}
+.theme-toggle-floating{position:fixed;top:16px;right:16px;background:var(--surface);border:1px solid var(--border);color:var(--text2);border-radius:8px;width:38px;height:38px;cursor:pointer;font-size:16px;z-index:2}
+.theme-toggle-floating:hover{border-color:var(--accent);color:var(--accent)}
 .theme-toggle-floating .icon-sun{display:none}[data-theme="light"] .theme-toggle-floating .icon-sun{display:inline}[data-theme="light"] .theme-toggle-floating .icon-moon{display:none}
-.login-container{width:100%;max-width:420px}
-.login-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px 28px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
-.login-logo{display:flex;gap:12px;align-items:center;margin-bottom:20px}
-.login-mark{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#f0a500,#ff6b35);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
-.login-logo-title{font-size:14px;font-weight:700;display:flex;gap:8px;align-items:center}
-.login-logo-badge{background:var(--accent);font-family:'Space Mono',monospace;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:1px}
-:root:not([data-theme="light"]) .login-logo-badge{color:#000}[data-theme="light"] .login-logo-badge{color:#fff}
-.login-logo-sub{font-size:11px;color:var(--text2);margin-top:2px}
-.login-divider{height:1px;background:var(--border);margin:0 0 20px}
-.login-heading{font-size:20px;font-weight:600}.login-subheading{font-size:13px;color:var(--text2);margin:4px 0 18px}
-.login-error{display:none;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red);font-size:12px;font-family:'Space Mono',monospace;border-radius:7px;padding:10px 12px;margin-bottom:14px}
+.login-wrap{width:100%;max-width:400px;position:relative;z-index:1}
+.brand-row{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:26px}
+.brand-mark{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#f5a524,#f97316);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 6px 20px rgba(245,165,36,.35)}
+.brand-name{font-size:15px;font-weight:700;line-height:1.3;text-align:left}
+.brand-sub{font-size:12px;color:var(--text2);font-weight:400}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:30px 28px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.login-heading{font-size:18px;font-weight:700;letter-spacing:-.01em}
+.login-subheading{font-size:13px;color:var(--text2);margin:5px 0 22px}
+.login-error{display:none;background:rgba(242,85,90,.09);border:1px solid rgba(242,85,90,.35);color:var(--red);font-size:12.5px;border-radius:8px;padding:10px 13px;margin-bottom:16px}
 .login-error.visible{display:block}
-.login-field{margin-bottom:14px}.login-field label{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:6px}
-.login-field input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:11px 12px;font-size:14px;outline:none}
-.login-field input:focus{border-color:var(--accent)}
-.login-btn{width:100%;padding:12px;background:linear-gradient(135deg,#f0a500,#ff6b35);border:none;border-radius:7px;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;color:#0d1117}
-[data-theme="light"] .login-btn{color:#fff}
-.login-btn:disabled{opacity:.5}
-.login-demo{margin-top:14px;font-size:11px;color:var(--text2);font-family:'Space Mono',monospace;line-height:1.8;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 12px}
-.login-footer{margin-top:18px;text-align:center;font-size:11px;color:var(--text2);font-family:'Space Mono',monospace}
+.login-field{margin-bottom:15px}
+.login-field label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:7px}
+.login-field input{width:100%;background:var(--input);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:11px 13px;font-size:14px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+.login-field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.login-btn{width:100%;padding:12px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;margin-top:4px}
+.login-btn:hover{filter:brightness(1.07)}
+.login-btn:disabled{opacity:.55;cursor:wait}
+.login-demo{margin-top:18px;font-size:12px;color:var(--text2);font-family:'Space Mono',monospace;line-height:1.9;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 14px}
+.login-demo b{color:var(--text)}
+.login-footer{margin-top:22px;text-align:center;font-size:12px;color:var(--text2);font-family:'Space Mono',monospace}
 .login-footer span{color:var(--accent);font-weight:700}
 </style>
 </head>
@@ -46,33 +50,32 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 
 <button class="theme-toggle-floating" data-theme-toggle aria-label="Alternar tema"><span class="icon-moon">🌙</span><span class="icon-sun">☀️</span></button>
 
-<div class="login-container">
-  <div class="login-card">
-    <div class="login-logo">
-      <div class="login-mark">⚡</div>
-      <div>
-        <div class="login-logo-title">ACOMPANHAMENTO DE DEMANDA <span class="login-logo-badge">ORION-PB</span></div>
-        <div class="login-logo-sub">SIATE × LIST • quarentena + caixa principal</div>
-      </div>
+<div class="login-wrap">
+  <div class="brand-row">
+    <div class="brand-mark">⚡</div>
+    <div>
+      <div class="brand-name">Acompanhamento de Demanda</div>
+      <div class="brand-sub">Orion · SIATE × LIST</div>
     </div>
-    <div class="login-divider"></div>
-    <div class="login-heading">Bem-vindo</div>
-    <div class="login-subheading">Faça login com seu e-mail e senha de acesso</div>
+  </div>
+  <div class="login-card">
+    <div class="login-heading">Bem-vindo de volta</div>
+    <div class="login-subheading">Entre com suas credenciais para acessar o painel</div>
     <div class="login-error" id="login-error"></div>
     <form id="login-form" onsubmit="return handleLogin(event)">
       <div class="login-field">
         <label for="email">E-mail</label>
-        <input type="email" id="email" placeholder="seu@email.com" required autocomplete="email">
+        <input type="email" id="email" placeholder="voce@empresa.com" required autocomplete="email">
       </div>
       <div class="login-field">
         <label for="password">Senha</label>
         <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
       </div>
-      <button type="submit" class="login-btn" id="login-btn">Entrar</button>
+      <button type="submit" class="login-btn" id="login-btn">Entrar →</button>
     </form>
-    <div class="login-demo">Demo local:<br>admin → admin@sistema / admin123<br>equipe → equipe@sistema / equipe123</div>
-    <div class="login-footer">Feito por <span>Valdeci Nunes</span></div>
+    <div class="login-demo"><b>Acesso demo</b><br>admin &nbsp;→ admin@sistema / admin123<br>equipe → equipe@sistema / equipe123</div>
   </div>
+  <div class="login-footer">Feito por <span>Valdeci Nunes</span></div>
 </div>
 
 <script src="js/theme.js"></script>
@@ -87,14 +90,14 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
     const btn = document.getElementById('login-btn');
     const errEl = document.getElementById('login-error');
     errEl.classList.remove('visible');
-    btn.disabled = true; btn.textContent = 'Entrando...';
+    btn.disabled = true; btn.textContent = 'Entrando…';
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
     const { error } = await signIn(email, password);
     if (error) {
-      errEl.textContent = 'E-mail ou senha incorretos.';
+      errEl.textContent = 'E-mail ou senha incorretos. Tente de novo.';
       errEl.classList.add('visible');
-      btn.disabled = false; btn.textContent = 'Entrar';
+      btn.disabled = false; btn.textContent = 'Entrar →';
       return false;
     }
     window.location.href = 'index.html';

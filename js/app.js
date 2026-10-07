@@ -392,7 +392,7 @@
     var sliceP = lp.slice((state.pagePrincipal - 1) * PAGE_SIZE, state.pagePrincipal * PAGE_SIZE);
     var html = '';
     if (!sliceP.length) {
-      html = '<div class="no-results"><div style="font-size:36px">📭</div>Nenhuma demanda na caixa principal.<br>Importe as bases acima (admin) para começar.</div>';
+      html = '<div class="no-results"><div class="big">📭</div>Nenhuma demanda na caixa principal.<br>Importe as bases acima (admin) para começar.</div>';
     } else {
       html = '<div class="table-wrap"><table><thead><tr>' +
         '<th>NUM OS</th><th>CODSERV</th><th>DATA SOL</th><th>REGIONAL</th><th>CIDADE</th><th>CLIENTE</th><th>TELEFONE</th><th>STATUS</th><th>RESPONSÁVEL</th><th>AÇÕES</th>' +
@@ -429,7 +429,7 @@
     var sliceQ = lq.slice((state.pageQuar - 1) * PAGE_SIZE, state.pageQuar * PAGE_SIZE);
     var hq = '';
     if (!sliceQ.length) {
-      hq = '<div class="no-results"><div style="font-size:36px">🛡️</div>Quarentena vazia.<br>Divergências (só em uma base) aparecem aqui após a importação.</div>';
+      hq = '<div class="no-results"><div class="big">🛡️</div>Quarentena vazia.<br>Divergências (só em uma base) aparecem aqui após a importação.</div>';
     } else {
       hq = '<div class="table-wrap"><table><thead><tr>' +
         '<th>NUM OS</th><th>ORIGEM</th><th>MOTIVO</th><th>DETALHE</th><th>AÇÕES (admin)</th>' +
@@ -659,7 +659,10 @@
     if (!sess) return;
     state.user = sess;
     state.isAdmin = isAdminEmail(sess.email);
-    $('me').innerHTML = esc(sess.email) + ' • <b>' + esc(sess.role || (state.isAdmin ? 'admin' : 'usuario')) + '</b>';
+    var role = sess.role || (state.isAdmin ? 'admin' : 'usuario');
+    $('me').textContent = sess.email;
+    if ($('role')) $('role').textContent = role;
+    if ($('avatar')) $('avatar').textContent = String(sess.email || '?').charAt(0).toUpperCase();
     if (!state.isAdmin) {
       var up = $('panel-upload');
       if (up) up.style.display = 'none';

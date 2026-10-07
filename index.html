@@ -3,15 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Acompanhamento de Demanda</title>
-<meta name="theme-color" content="#0d1117">
+<title>Acompanhamento de Demanda · Orion</title>
+<meta name="theme-color" content="#0b0e13">
 <script>
   try {
     var _t = localStorage.getItem('sad-theme');
     if (_t === 'light') document.documentElement.setAttribute('data-theme', 'light');
   } catch (e) {}
 </script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="js/auth.js"></script>
@@ -19,167 +21,242 @@
 </head>
 <body>
 
-<header>
-  <div class="logo-wrap">
-    <div class="logo-img" style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#f0a500,#ff6b35);display:flex;align-items:center;justify-content:center;font-size:22px">⚡</div>
-    <div class="logo-text">
-      <div class="logo-title">ACOMPANHAMENTO DE DEMANDA <span class="logo-badge">ORION-PB</span></div>
-      <div class="subtitle">Conciliação SIATE × LIST • NUMOS exato • Quarentena + Caixa principal</div>
-    </div>
-  </div>
-  <div class="header-actions">
-    <span class="user-badge" id="me">…</span>
-    <button class="theme-toggle" data-theme-toggle aria-label="Alternar tema"><span class="icon-moon">🌙</span><span class="icon-sun">☀️</span></button>
-    <button class="btn-signout" onclick="signOut()">Sair ↗</button>
-    <div class="count-badge" id="count-badge">…</div>
-  </div>
-</header>
+<div class="layout">
 
-<div class="main">
-
-  <div class="panel" id="not-admin" style="display:none">
-    <div class="panel-body">
-      <div class="alert-box">👋 Você está como <b>usuário</b>. A importação das bases é feita pelo <b>admin</b>. Use a <b>Caixa principal</b> abaixo para pegar demandas e atualizar o status.</div>
-    </div>
-  </div>
-
-  <!-- UPLOAD (admin) -->
-  <div class="panel" id="panel-upload">
-    <div class="panel-header">
-      <div class="panel-icon">📤</div>
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">⚡</div>
       <div>
-        <div class="panel-title">1 · Subir bases (admin)</div>
-        <div class="panel-subtitle">SIATE = LISTA OS (.xls) · LIST = Gerenciador de Obras (.csv) · comparação pelo NUMOS exato</div>
+        <div class="brand-name">Acompanhamento<br>de Demanda</div>
+        <div class="brand-sub">Orion · SIATE × LIST</div>
       </div>
     </div>
-    <div class="panel-body">
-      <div class="upload-grid">
-        <div class="upload-box" id="box-si">
-          <label>🔶 Base SIATE — LISTA OS (.xls / .xlsx)</label>
-          <input type="file" id="file-si" accept=".xls,.xlsx,.csv">
-          <div class="upload-status" id="st-file-si">Nenhum arquivo.</div>
-        </div>
-        <div class="upload-box" id="box-li">
-          <label>🔷 Base LIST — Gerenciador de Obras (.csv / .xls)</label>
-          <input type="file" id="file-li" accept=".csv,.xls,.xlsx">
-          <div class="upload-status" id="st-file-li">Nenhum arquivo.</div>
+    <nav class="nav">
+      <div class="nav-label">Operação</div>
+      <button class="nav-item active" data-nav="principal"><span class="ni">📥</span>Caixa principal<span class="nb" id="tab-n-p">0</span></button>
+      <button class="nav-item" data-nav="quarentena"><span class="ni">🛡️</span>Quarentena<span class="nb" id="tab-n-q">0</span></button>
+      <div class="nav-label">Administração</div>
+      <button class="nav-item" data-nav="importar"><span class="ni">📤</span>Importar bases</button>
+      <button class="nav-item" data-nav="resumo"><span class="ni">📊</span>Resumo</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="user-card">
+        <div class="user-avatar" id="avatar">–</div>
+        <div class="user-meta">
+          <div class="user-email" id="me">…</div>
+          <div class="user-role" id="role">…</div>
         </div>
       </div>
-      <div class="panel-hint">Sanitização SIATE: NUMOS só-dígitos (chave), CODSERV inteiro, DATASOL→ISO, CODREG 1=LESTE 2=CENTRO 3=OESTE, textos trim/upper, telefones só-dígitos, remove sem-NUMOS e duplicadas. LIST: OS normalizada, remove vazias/duplicadas.</div>
+      <button class="btn-signout" style="width:100%" onclick="signOut()">Sair ↗</button>
     </div>
-  </div>
+  </aside>
 
-  <!-- FILTROS -->
-  <div class="panel" id="panel-upload2">
-    <div class="panel-header">
-      <div class="panel-icon">🎛️</div>
-      <div>
-        <div class="panel-title">2 · Filtros antes de jogar no banco</div>
-        <div class="panel-subtitle">Recorta as duas bases (como filtrar as planilhas e apagar o resto) — só o filtrado é comparado e vai ao banco</div>
+  <!-- ── Content ── -->
+  <div class="content">
+    <div class="topbar">
+      <button class="theme-toggle menu-btn" id="menu-btn" aria-label="Abrir menu">☰</button>
+      <span class="page-crumb"><b>Acompanhamento de Demanda</b> &nbsp;/&nbsp; <span id="crumb">Caixa principal</span></span>
+      <div class="topbar-right">
+        <div class="count-badge" id="count-badge">…</div>
+        <button class="theme-toggle" data-theme-toggle aria-label="Alternar tema"><span class="icon-moon">🌙</span><span class="icon-sun">☀️</span></button>
       </div>
     </div>
-    <div class="panel-body">
-      <div class="filter-grid">
-        <div class="field">
-          <label>Regional (CODREG)</label>
-          <div class="check-row">
-            <label class="check-pill on"><input type="checkbox" value="1" checked>1·LESTE</label>
-            <label class="check-pill on"><input type="checkbox" value="2" checked>2·CENTRO</label>
-            <label class="check-pill on"><input type="checkbox" value="3" checked>3·OESTE</label>
+
+    <div class="main">
+      <div class="page-head">
+        <div class="page-title" id="page-title">Caixa principal</div>
+        <div class="page-desc" id="page-desc">Demandas congruentes (nas duas bases) prontas para a equipe assumir.</div>
+      </div>
+
+      <div class="panel" id="not-admin" style="display:none">
+        <div class="panel-body">
+          <div class="alert-box">👋 Você está como <b>usuário</b>. A importação das bases é feita pelo <b>admin</b>. Use a <b>Caixa principal</b> abaixo para assumir demandas e atualizar o status.</div>
+        </div>
+      </div>
+
+      <!-- Resumo -->
+      <div class="stats-grid" id="panel-resumo">
+        <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray">📦</div><div class="stat-label">SIATE válidas</div></div><div class="stat-value" id="st-si">0</div><div class="stat-sub" id="result-msg">—</div></div>
+        <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray">📋</div><div class="stat-label">LIST válidas</div></div><div class="stat-value" id="st-li">0</div><div class="stat-sub">base gerenciador</div></div>
+        <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green">✓</div><div class="stat-label">Congruentes</div></div><div class="stat-value" id="st-ok" style="color:var(--green)">0</div><div class="stat-sub">→ caixa principal</div></div>
+        <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow">⚠</div><div class="stat-label">Só SIATE</div></div><div class="stat-value" id="st-ssi" style="color:var(--yellow)">0</div><div class="stat-sub">→ quarentena</div></div>
+        <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-red">⚠</div><div class="stat-label">Só LIST</div></div><div class="stat-value" id="st-sli" style="color:var(--red)">0</div><div class="stat-sub">→ quarentena</div></div>
+        <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-blue">📥</div><div class="stat-label">No banco · principal</div></div><div class="stat-value" id="st-p">0</div><div class="stat-sub">caixa da equipe</div></div>
+        <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-accent">🛡️</div><div class="stat-label">No banco · quarentena</div></div><div class="stat-value" id="st-q">0</div><div class="stat-sub">aguardando admin</div></div>
+      </div>
+
+      <!-- Upload (admin) -->
+      <div class="panel" id="panel-upload">
+        <div class="panel-header">
+          <div class="panel-icon">📤</div>
+          <div>
+            <div class="panel-title">Importar bases</div>
+            <div class="panel-subtitle">SIATE = LISTA OS (.xls) · LIST = Gerenciador de Obras (.csv) · chave NUMOS exato</div>
           </div>
+          <span class="panel-step">passo 1</span>
         </div>
-        <div class="field">
-          <label>Código de serviço</label>
-          <select id="f-codserv"><option value="">Todos</option></select>
-        </div>
-        <div class="field">
-          <label>Cidade (contém)</label>
-          <input type="text" id="f-cidade" placeholder="Ex: JOAO PESSOA">
-        </div>
-        <div class="field">
-          <label>Data sol — início</label>
-          <input type="date" id="f-dini">
-        </div>
-        <div class="field">
-          <label>Data sol — fim</label>
-          <input type="date" id="f-dfim">
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn-primary" id="btn-process" disabled>⚙️ Comparar bases</button>
-        <button class="btn-ghost" id="btn-tobank">💾 Jogar no banco</button>
-        <button class="btn-ghost" id="btn-clearfilters">✖️ Limpar filtros</button>
-        <button class="btn-ghost" id="btn-clear">🧹 Limpar banco local</button>
-      </div>
-      <div class="alert-box" id="alert" style="display:none"></div>
-      <div class="log-box" id="log">Aguardando arquivos…</div>
-    </div>
-  </div>
-
-  <!-- RESUMO -->
-  <div class="panel">
-    <div class="panel-header">
-      <div class="panel-icon">📊</div>
-      <div>
-        <div class="panel-title">Resumo</div>
-        <div class="panel-subtitle" id="result-msg">Nada processado ainda.</div>
-      </div>
-    </div>
-    <div class="panel-body">
-      <div class="stats-grid">
-        <div class="stat-box"><div class="slabel">SIATE válidas</div><div class="svalue" id="st-si">0</div></div>
-        <div class="stat-box"><div class="slabel">LIST válidas</div><div class="svalue" id="st-li">0</div></div>
-        <div class="stat-box"><div class="slabel">Congruentes</div><div class="svalue" id="st-ok" style="color:var(--green)">0</div><div class="ssub">→ caixa principal</div></div>
-        <div class="stat-box"><div class="slabel">Só SIATE</div><div class="svalue" id="st-ssi" style="color:var(--yellow)">0</div><div class="ssub">→ quarentena</div></div>
-        <div class="stat-box"><div class="slabel">Só LIST</div><div class="svalue" id="st-sli" style="color:var(--red)">0</div><div class="ssub">→ quarentena</div></div>
-        <div class="stat-box"><div class="slabel">No banco · principal</div><div class="svalue" id="st-p">0</div></div>
-        <div class="stat-box"><div class="slabel">No banco · quarentena</div><div class="svalue" id="st-q">0</div></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- TABS -->
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="principal">📥 Caixa principal <span class="n" id="tab-n-p">0</span></button>
-    <button class="tab-btn" data-tab="quarentena">🛡️ Quarentena <span class="n" id="tab-n-q">0</span></button>
-  </div>
-
-  <div class="search-bar">
-    <div class="search-input-wrap">
-      <span class="search-icon">🔍</span>
-      <input type="text" id="q" placeholder="Buscar por NUM OS, cliente, cidade, codserv…" autocomplete="off">
-    </div>
-    <button class="search-btn" id="btn-search">Buscar</button>
-  </div>
-
-  <div id="view-principal">
-    <div class="status-filter">
-      <span class="chip active" data-st="TODOS">TODOS</span>
-      <span class="chip" data-st="A INICIAR">A INICIAR</span>
-      <span class="chip" data-st="EM ANDAMENTO">EM ANDAMENTO</span>
-      <span class="chip" data-st="PENDENTE">PENDENTE</span>
-      <span class="chip" data-st="ENCERRADO">ENCERRADO</span>
-    </div>
-    <div class="panel"><div class="panel-body" id="tbl-principal"></div></div>
-  </div>
-
-  <div id="view-quarentena" style="display:none">
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-icon">🛡️</div>
-        <div>
-          <div class="panel-title">Quarentena — divergências</div>
-          <div class="panel-subtitle">Tem em uma base e não tem na outra · admin aprova (→ caixa) ou reprova</div>
+        <div class="panel-body">
+          <div class="upload-grid">
+            <div class="upload-box" id="box-si">
+              <label>🔶 Base SIATE — LISTA OS (.xls / .xlsx)</label>
+              <input type="file" id="file-si" accept=".xls,.xlsx,.csv">
+              <div class="upload-status" id="st-file-si">Nenhum arquivo.</div>
+            </div>
+            <div class="upload-box" id="box-li">
+              <label>🔷 Base LIST — Gerenciador de Obras (.csv / .xls)</label>
+              <input type="file" id="file-li" accept=".csv,.xls,.xlsx">
+              <div class="upload-status" id="st-file-li">Nenhum arquivo.</div>
+            </div>
+          </div>
+          <div class="panel-hint">Sanitização SIATE: NUMOS só-dígitos (chave), CODSERV inteiro, DATASOL→ISO, CODREG 1=LESTE 2=CENTRO 3=OESTE, textos trim/upper, telefones só-dígitos, remove sem-NUMOS e duplicadas. LIST: OS normalizada, remove vazias/duplicadas.</div>
         </div>
       </div>
-      <div class="panel-body" id="tbl-quarentena"></div>
+
+      <!-- Filtros -->
+      <div class="panel" id="panel-filtros">
+        <div class="panel-header">
+          <div class="panel-icon">🎛️</div>
+          <div>
+            <div class="panel-title">Filtros antes de jogar no banco</div>
+            <div class="panel-subtitle">Recorta as duas bases (como filtrar as planilhas e apagar o resto) — só o filtrado é comparado e vai ao banco</div>
+          </div>
+          <span class="panel-step">passo 2</span>
+        </div>
+        <div class="panel-body">
+          <div class="filter-grid">
+            <div class="field">
+              <label>Regional (CODREG)</label>
+              <div class="check-row">
+                <label class="check-pill on"><input type="checkbox" value="1" checked>1 · Leste</label>
+                <label class="check-pill on"><input type="checkbox" value="2" checked>2 · Centro</label>
+                <label class="check-pill on"><input type="checkbox" value="3" checked>3 · Oeste</label>
+              </div>
+            </div>
+            <div class="field">
+              <label>Código de serviço</label>
+              <select id="f-codserv"><option value="">Todos</option></select>
+            </div>
+            <div class="field">
+              <label>Cidade (contém)</label>
+              <input type="text" id="f-cidade" placeholder="Ex: JOAO PESSOA">
+            </div>
+            <div class="field">
+              <label>Data sol — início</label>
+              <input type="date" id="f-dini">
+            </div>
+            <div class="field">
+              <label>Data sol — fim</label>
+              <input type="date" id="f-dfim">
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn-primary" id="btn-process" disabled>⚙️&nbsp; Comparar bases</button>
+            <button class="btn-ghost" id="btn-tobank">💾 Jogar no banco</button>
+            <button class="btn-ghost" id="btn-clearfilters">✖️ Limpar filtros</button>
+            <button class="btn-ghost" id="btn-clear">🧹 Limpar banco</button>
+          </div>
+          <div class="alert-box" id="alert" style="display:none"></div>
+          <div class="log-box" id="log">Aguardando arquivos…</div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="principal">📥 Caixa principal <span class="n" id="tab-n-p2">0</span></button>
+        <button class="tab-btn" data-tab="quarentena">🛡️ Quarentena <span class="n" id="tab-n-q2">0</span></button>
+      </div>
+
+      <div class="search-bar">
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="q" placeholder="Buscar por NUM OS, cliente, cidade, codserv…" autocomplete="off">
+        </div>
+        <button class="search-btn" id="btn-search">Buscar</button>
+      </div>
+
+      <div id="view-principal">
+        <div class="status-filter">
+          <span class="chip active" data-st="TODOS">Todos</span>
+          <span class="chip" data-st="A INICIAR">A iniciar</span>
+          <span class="chip" data-st="EM ANDAMENTO">Em andamento</span>
+          <span class="chip" data-st="PENDENTE">Pendente</span>
+          <span class="chip" data-st="ENCERRADO">Encerrado</span>
+        </div>
+        <div class="panel"><div class="panel-body" id="tbl-principal"></div></div>
+      </div>
+
+      <div id="view-quarentena" style="display:none">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon">🛡️</div>
+            <div>
+              <div class="panel-title">Quarentena — divergências</div>
+              <div class="panel-subtitle">Tem em uma base e não tem na outra · admin aprova (→ caixa) ou reprova</div>
+            </div>
+          </div>
+          <div class="panel-body" id="tbl-quarentena"></div>
+        </div>
+      </div>
+
+      <footer class="site-footer">Feito por <strong>Valdeci Nunes</strong></footer>
     </div>
   </div>
-
 </div>
 
-<footer class="site-footer">Feito por <strong>Valdeci Nunes</strong></footer>
-
 <script src="js/app.js"></script>
+<script>
+  // Navegação da sidebar (usa as abas existentes + rolagem)
+  (function () {
+    var titles = {
+      principal: ['Caixa principal', 'Demandas congruentes (nas duas bases) prontas para a equipe assumir.'],
+      quarentena: ['Quarentena', 'Divergências: tem em uma base e não tem na outra. O admin aprova ou reprova.'],
+      importar: ['Importar bases', 'Suba as duas bases (admin), ajuste os filtros e jogue no banco.'],
+      resumo: ['Resumo', 'Totais da última comparação e do banco local.']
+    };
+    function go(where) {
+      document.body.classList.remove('nav-open');
+      document.querySelectorAll('.nav-item').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-nav') === where);
+      });
+      var t = titles[where] || titles.principal;
+      document.getElementById('crumb').textContent = t[0];
+      document.getElementById('page-title').textContent = t[0];
+      document.getElementById('page-desc').textContent = t[1];
+      if (where === 'principal' || where === 'quarentena') {
+        var tab = document.querySelector('.tab-btn[data-tab="' + where + '"]');
+        if (tab) tab.click();
+        document.querySelector('.tabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (where === 'importar') {
+        document.getElementById('panel-upload').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (where === 'resumo') {
+        document.getElementById('panel-resumo').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+    document.querySelectorAll('.nav-item').forEach(function (b) {
+      b.addEventListener('click', function () { go(b.getAttribute('data-nav')); });
+    });
+    // Espelha contadores da sidebar nas abas (app.js atualiza tab-n-p/tab-n-q)
+    setInterval(function () {
+      var a = document.getElementById('tab-n-p'), b2 = document.getElementById('tab-n-q');
+      var c = document.getElementById('tab-n-p2'), d = document.getElementById('tab-n-q2');
+      if (a && c) c.textContent = a.textContent;
+      if (b2 && d) d.textContent = b2.textContent;
+    }, 500);
+    document.getElementById('menu-btn').addEventListener('click', function () {
+      document.body.classList.toggle('nav-open');
+    });
+    // Avatar + papel (sessão já validada pelo app.js)
+    setTimeout(function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('sad-session') || 'null');
+        if (s) {
+          document.getElementById('avatar').textContent = String(s.email || '?').charAt(0).toUpperCase();
+          document.getElementById('role').textContent = s.role || (String(s.email).indexOf('admin') !== -1 ? 'admin' : 'usuario');
+        }
+      } catch (e) {}
+    }, 400);
+  })();
+</script>
 </body>
 </html>
