@@ -12,11 +12,39 @@
   var state = {
     siateRaw: [], siateClean: [], listRaw: [], listClean: [],
     result: null, // {cong, soSiate, soList, log}
-    tab: 'principal', search: '', statusFilter: 'TODOS',
+    view: 'caixa', search: '', statusFilter: 'TODOS',
+    cf: { reg: '', codserv: '', cidade: '', dini: '', dfim: '', resp: '' }, // filtros da caixa
     pagePrincipal: 1, pageQuar: 1,
     isAdmin: false, user: null,
     codservOptions: [],
   };
+
+  var VIEW_TITLES = {
+    caixa: ['Caixa principal', 'Demandas congruentes (nas duas bases) prontas para a equipe assumir.'],
+    quarentena: ['Quarentena', 'Divergências: tem em uma base e não tem na outra. O admin aprova ou reprova.'],
+    importar: ['Importar bases', 'Suba as duas bases (admin), ajuste os filtros e jogue no banco.'],
+    resumo: ['Resumo', 'Totais da última comparação e do banco local.'],
+    acompanhar: ['Acompanhar usuários', 'Quais OS estão com quais pessoas e em qual status.'],
+  };
+  var ADMIN_VIEWS = ['quarentena', 'importar', 'acompanhar'];
+
+  function showView(v) {
+    if (ADMIN_VIEWS.indexOf(v) !== -1 && !state.isAdmin) v = 'caixa';
+    state.view = v;
+    var map = { caixa: 'view-principal', quarentena: 'view-quarentena', importar: 'view-importar', resumo: 'view-resumo', acompanhar: 'view-acompanhar' };
+    Object.keys(map).forEach(function (k) {
+      var el = $(map[k]);
+      if (el) el.style.display = (k === v) ? '' : 'none';
+    });
+    document.querySelectorAll('.nav-item').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-nav') === v);
+    });
+    var t = VIEW_TITLES[v] || VIEW_TITLES.caixa;
+    if ($('crumb')) $('crumb').textContent = t[0];
+    if ($('page-title')) $('page-title').textContent = t[0];
+    if ($('page-desc')) $('page-desc').textContent = t[1];
+    if (v === 'acompanhar') renderAcompanhar();
+  }
 
   // ---------- utils ----------
   function $(id) { return document.getElementById(id); }
@@ -350,8 +378,18 @@
 
   function filteredPrincipal(db) {
     var q = state.search.trim().toUpperCase();
+    var cf = state.cf;
     return db.principal.filter(function (p) {
       if (state.statusFilter !== 'TODOS' && p.statusDemanda !== state.statusFilter) return false;
+      if (cf.reg && String(p.codreg || '') !== cf.reg) return false;
+      if (cf.codserv && String(p.codserv || '') !== cf.codserv) return false;
+      if (cf.cidade && String(p.cidade || '').toUpperCase().indexOf(cf.cidade) === -1) return false;
+      if ((cf.dini || cf.dfim) && p.dataISO) {
+        if (cf.dini && p.dataISO < cf.dini) return false;
+        if (cf.dfim && p.dataISO > cf.dfim) return false;
+      }
+      if (cf.resp === '__NONE__' && p.responsavel) return false;
+      if (cf.resp && cf.resp !== '__NONE__' && p.responsavel !== cf.resp) return false;
       if (!q) return true;
       return String(p.numos).indexOf(q) !== -1 ||
         String(p.cliente || '').toUpperCase().indexOf(q) !== -1 ||
@@ -462,31 +500,134 @@
     renderStats();
   }
 
-  function renderAll(msg) {
-    renderTables(msg);
-    // visibilidade das abas
-    $('view-principal').style.display = state.tab === 'principal' ? '' : 'none';
-    $('view-quarentena').style.display = state.tab === 'quarentena' ? '' : 'none';
-    document.querySelectorAll('.tab-btn').forEach(function (b) {
-      b.classList.toggle('active', b.getAttribute('data-tab') === state.tab);
+  // ---------- acompanhar usuários (admin) ----------
+  function renderAcompanhar() {
+    var el = $('tbl-acompanhar');
+    if (!el) return;
+    var db = loadDB();
+    var groups = {}, order = [];
+    db.principal.forEach(function (p) {
+      var k = p.responsavel || '';
+      if (!groups[k]) { groups[k] = { total: 0, ini: 0, and: 0, pen: 0, enc: 0, oss: [] }; order.push(k); }
+      var g = groups[k];
+      g.total++;
+      if (p.statusDemanda === 'A INICIAR') g.ini++;
+      else if (p.statusDemanda === 'EM ANDAMENTO') g.and++;
+      else if (p.statusDemanda === 'PENDENTE') g.pen++;
+      else if (p.statusDemanda === 'ENCERRADO') g.enc++;
+      if (g.oss.length < 30) g.oss.push(p.numos);
     });
+    order.sort(function (a, b) {
+      if (!a) return 1; if (!b) return -1;
+      return groups[b].total - groups[a].total;
+    });
+    if (!order.length) {
+      el.innerHTML = '<div class="no-results"><div class="big">👥</div>Ninguém com OS ainda.<br>A caixa principal está vazia ou sem responsáveis.</div>';
+      return;
+    }
+    var h = '<div class="table-wrap"><table><thead><tr>' +
+      '<th>Pessoa</th><th>Total</th><th>A iniciar</th><th>Em andamento</th><th>Pendente</th><th>Encerrado</th><th>OS (amostra)</th><th></th>' +
+      '</tr></thead><tbody>';
+    order.forEach(function (k) {
+      var g = groups[k];
+      h += '<tr>' +
+        '<td><b>' + esc(k || '— Sem responsável —') + '</b></td>' +
+        '<td class="mono"><b>' + g.total + '</b></td>' +
+        '<td><span class="badge badge-blue">' + g.ini + '</span></td>' +
+        '<td><span class="badge badge-yellow">' + g.and + '</span></td>' +
+        '<td><span class="badge badge-red">' + g.pen + '</span></td>' +
+        '<td><span class="badge badge-green">' + g.enc + '</span></td>' +
+        '<td class="mono" style="font-size:11px;max-width:280px">' + esc(g.oss.join(', ')) + (g.total > g.oss.length ? ' …' : '') + '</td>' +
+        '<td><button class="btn-small" data-act="ver-caixa" data-resp="' + esc(k) + '">Ver na caixa</button></td></tr>';
+    });
+    el.innerHTML = h + '</tbody></table></div>';
+  }
+
+  // ---------- filtros da caixa ----------
+  function syncCaixaFilterInputs() {
+    if ($('f2-reg')) $('f2-reg').value = state.cf.reg;
+    if ($('f2-codserv')) $('f2-codserv').value = state.cf.codserv;
+    if ($('f2-cidade')) $('f2-cidade').value = state.cf.cidade;
+    if ($('f2-dini')) $('f2-dini').value = state.cf.dini;
+    if ($('f2-dfim')) $('f2-dfim').value = state.cf.dfim;
+    if ($('f2-resp')) $('f2-resp').value = state.cf.resp;
+  }
+  function populateCaixaFilters(db) {
+    var cs = {}, rs = {};
+    db.principal.forEach(function (p) {
+      if (p.codserv) cs[p.codserv] = 1;
+      if (p.responsavel) rs[p.responsavel] = 1;
+    });
+    var sel = $('f2-codserv');
+    if (sel) {
+      var cur = state.cf.codserv;
+      sel.innerHTML = '<option value="">Todos</option>' + Object.keys(cs).sort().map(function (c) {
+        return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+      }).join('');
+      sel.value = cur;
+    }
+    var selR = $('f2-resp');
+    if (selR) {
+      var curR = state.cf.resp;
+      selR.innerHTML = '<option value="">Todos</option><option value="__NONE__">Sem responsável</option>' +
+        Object.keys(rs).sort().map(function (r) {
+          return '<option value="' + esc(r) + '">' + esc(r) + '</option>';
+        }).join('');
+      selR.value = curR;
+    }
+  }
+
+  function renderAll(msg) {
+    var db = loadDB();
+    populateCaixaFilters(db);
+    renderTables(msg);
     document.querySelectorAll('.chip[data-st]').forEach(function (c) {
       c.classList.toggle('active', c.getAttribute('data-st') === state.statusFilter);
     });
+    showView(state.view);
+  }
+
+  function applySearch() {
+    state.search = ($('q') || {}).value || '';
+    state.pagePrincipal = 1; state.pageQuar = 1;
+    renderAll();
   }
 
   // ---------- eventos ----------
   function bindEvents() {
-    document.querySelectorAll('.tab-btn').forEach(function (b) {
-      b.addEventListener('click', function () { state.tab = b.getAttribute('data-tab'); renderAll(); });
-    });
     document.querySelectorAll('.chip[data-st]').forEach(function (c) {
       c.addEventListener('click', function () { state.statusFilter = c.getAttribute('data-st'); state.pagePrincipal = 1; renderAll(); });
     });
     var bs = $('btn-search');
-    if (bs) bs.addEventListener('click', function () { state.search = ($('q') || {}).value || ''; state.pagePrincipal = 1; state.pageQuar = 1; renderAll(); });
+    if (bs) bs.addEventListener('click', applySearch);
     var qi = $('q');
-    if (qi) qi.addEventListener('keydown', function (e) { if (e.key === 'Enter') { state.search = qi.value; state.pagePrincipal = 1; state.pageQuar = 1; renderAll(); } });
+    if (qi) qi.addEventListener('keydown', function (e) { if (e.key === 'Enter') applySearch(); });
+
+    // filtros da caixa
+    ['f2-reg', 'f2-codserv', 'f2-cidade', 'f2-dini', 'f2-dfim', 'f2-resp'].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      el.addEventListener('change', function () {
+        state.cf = {
+          reg: ($('f2-reg') || {}).value || '',
+          codserv: ($('f2-codserv') || {}).value || '',
+          cidade: ((($('f2-cidade') || {}).value) || '').toUpperCase().trim(),
+          dini: (($('f2-dini') || {}).value) || '',
+          dfim: (($('f2-dfim') || {}).value) || '',
+          resp: ($('f2-resp') || {}).value || '',
+        };
+        state.pagePrincipal = 1;
+        renderAll();
+      });
+    });
+    var f2c = $('btn-f2-clear');
+    if (f2c) f2c.addEventListener('click', function () {
+      state.cf = { reg: '', codserv: '', cidade: '', dini: '', dfim: '', resp: '' };
+      state.search = ''; if ($('q')) $('q').value = '';
+      state.statusFilter = 'TODOS'; state.pagePrincipal = 1;
+      syncCaixaFilterInputs();
+      renderAll();
+    });
 
     document.addEventListener('click', function (e) {
       var pg = e.target.getAttribute && e.target.getAttribute('data-pg');
@@ -507,6 +648,15 @@
       if (act === 'liberar') {
         var p2 = db.principal.find(function (x) { return x.numos === os; });
         if (p2) { p2.responsavel = null; p2.statusDemanda = 'A INICIAR'; saveDB(db); renderAll('OS ' + os + ' devolvida à caixa.'); }
+      }
+      if (act === 'ver-caixa') {
+        var resp = btn.getAttribute('data-resp') || '';
+        state.cf.resp = resp ? resp : '__NONE__';
+        state.search = ''; if ($('q')) $('q').value = '';
+        state.statusFilter = 'TODOS'; state.pagePrincipal = 1;
+        syncCaixaFilterInputs();
+        renderAll();
+        return;
       }
       if ((act === 'aprovar' || act === 'reprovar') && !state.isAdmin) { alert('Somente admin pode aprovar/reprovar.'); return; }
       if (act === 'aprovar') {
@@ -664,12 +814,16 @@
     if ($('role')) $('role').textContent = role;
     if ($('avatar')) $('avatar').textContent = String(sess.email || '?').charAt(0).toUpperCase();
     if (!state.isAdmin) {
+      // Quarentena, acompanhar e importar: só admin
+      document.querySelectorAll('.admin-only').forEach(function (el) { el.style.display = 'none'; });
       var up = $('panel-upload');
       if (up) up.style.display = 'none';
       var nq = $('not-admin');
       if (nq) nq.style.display = '';
     }
+    window.SADshow = function (v) { showView(v); };
     bindEvents();
+    syncCaixaFilterInputs();
     renderAll();
     $('log').textContent = 'Pronto. ' + (state.isAdmin ? 'Suba as duas bases para comparar.' : 'Aguardando importação do admin.');
   }
