@@ -167,34 +167,36 @@
 
       <!-- ═══ VIEW: CAIXA PRINCIPAL (todos) ═══ -->
       <section id="view-principal">
-        <div class="panel">
+        <div class="panel panel-slim">
           <div class="panel-header">
-            <div class="panel-icon">🔎</div>
+            <div class="panel-icon" style="width:30px;height:30px;font-size:15px">🔎</div>
             <div>
-              <div class="panel-title">Filtros da caixa</div>
-              <div class="panel-subtitle">Filtre por regional, serviço, cidade, período ou responsável</div>
+              <div class="panel-title" style="font-size:13px">Caixa principal</div>
             </div>
+            <button class="filters-toggle" id="btn-f2-toggle" title="Mostrar/ocultar filtros">
+              Filtros <span class="f2-count" id="f2-count">0</span> <span class="filters-chevron">▾</span>
+            </button>
           </div>
-          <div class="panel-body">
+          <div class="panel-body" id="f2-body">
             <div class="filter-grid">
               <div class="field">
                 <label>Regional</label>
                 <select id="f2-reg"><option value="">Todas</option><option value="1">1 · Leste</option><option value="2">2 · Centro</option><option value="3">3 · Oeste</option></select>
               </div>
               <div class="field">
-                <label>Código de serviço</label>
+                <label>Serviço</label>
                 <select id="f2-codserv"><option value="">Todos</option></select>
               </div>
               <div class="field">
-                <label>Cidade (contém)</label>
+                <label>Cidade</label>
                 <input type="text" id="f2-cidade" placeholder="Ex: CAMPINA GRANDE">
               </div>
               <div class="field">
-                <label>Data sol — início</label>
+                <label>De</label>
                 <input type="date" id="f2-dini">
               </div>
               <div class="field">
-                <label>Data sol — fim</label>
+                <label>Até</label>
                 <input type="date" id="f2-dfim">
               </div>
               <div class="field">
@@ -202,8 +204,8 @@
                 <select id="f2-resp"><option value="">Todos</option><option value="__NONE__">Sem responsável</option></select>
               </div>
             </div>
-            <div class="btn-row">
-              <button class="btn-ghost" id="btn-f2-clear">✖️ Limpar filtros</button>
+            <div class="btn-row" style="margin-top:12px">
+              <button class="btn-ghost" id="btn-f2-clear" style="padding:8px 14px;font-size:12px">✖️ Limpar</button>
             </div>
           </div>
         </div>

@@ -544,6 +544,28 @@
   }
 
   // ---------- filtros da caixa ----------
+  function f2Count() {
+    var n = 0, cf = state.cf;
+    if (cf.reg) n++;
+    if (cf.codserv) n++;
+    if (cf.cidade) n++;
+    if (cf.dini || cf.dfim) n++;
+    if (cf.resp) n++;
+    return n;
+  }
+  function syncF2Toggle() {
+    var body = $('f2-body'), btn = $('btn-f2-toggle'), badge = $('f2-count');
+    if (!body || !btn) return;
+    var open = true;
+    try { open = localStorage.getItem('sad-f2-open') !== '0'; } catch (e) {}
+    body.classList.toggle('closed', !open);
+    btn.classList.toggle('closed', !open);
+    if (badge) {
+      var n = f2Count();
+      badge.textContent = n;
+      badge.classList.toggle('show', n > 0);
+    }
+  }
   function syncCaixaFilterInputs() {
     if ($('f2-reg')) $('f2-reg').value = state.cf.reg;
     if ($('f2-codserv')) $('f2-codserv').value = state.cf.codserv;
@@ -584,6 +606,7 @@
     document.querySelectorAll('.chip[data-st]').forEach(function (c) {
       c.classList.toggle('active', c.getAttribute('data-st') === state.statusFilter);
     });
+    syncF2Toggle();
     showView(state.view);
   }
 
@@ -627,6 +650,13 @@
       state.statusFilter = 'TODOS'; state.pagePrincipal = 1;
       syncCaixaFilterInputs();
       renderAll();
+    });
+    var f2t = $('btn-f2-toggle');
+    if (f2t) f2t.addEventListener('click', function () {
+      var open = true;
+      try { open = localStorage.getItem('sad-f2-open') !== '0'; } catch (e) {}
+      try { localStorage.setItem('sad-f2-open', open ? '0' : '1'); } catch (e) {}
+      syncF2Toggle();
     });
 
     document.addEventListener('click', function (e) {
