@@ -82,7 +82,34 @@
     } catch (e) {}
     return { principal: [], quarentena: [], imports: [], reproved: [] };
   }
-  function saveDB(db) { try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch (e) {} }
+  function saveDB(db) {
+    try { localStorage.setItem(DB_KEY, JSON.stringify(db)); return true; }
+    catch (e) { return false; } // quota excedida (~5MB) — pushToDB avisa
+  }
+
+  // ---------- quarentena compacta (cabe na quota do localStorage) ----------
+  // SO_SIATE: {n,c,d,r,cid,cli,t} | SO_LIST: {n,c,desc,loc,t}
+  function compactQ(dados, origem) {
+    var d = dados || {};
+    if (origem === 'SO_SIATE') {
+      return {
+        n: d.numos || '', c: d.codserv || '', d: d.dataISO || '',
+        r: d.codreg || '', cid: String(d.cidade || '').slice(0, 40),
+        cli: String(d.cliente || '').slice(0, 50), t: d.tel1 || '',
+      };
+    }
+    return {
+      n: d.numos || '', c: d.codserv || '', desc: String(d.descricao || '').slice(0, 60),
+      loc: String(d.local || '').slice(0, 40), t: d.telefone || '',
+    };
+  }
+  // Lê campo da quarentena nos 2 formatos (compacto novo + legado 'dados')
+  function qget(x, k) {
+    if (x.d && x.d[k] !== undefined) return x.d[k];
+    var legacy = x.dados || {};
+    var map = { n: 'numos', c: 'codserv', d: 'dataISO', r: 'codreg', cid: 'cidade', cli: 'cliente', t: 'tel1', desc: 'descricao', loc: 'local' };
+    return legacy[map[k] || k] || '';
+  }
 
   // ---------- SheetJS parse ----------
   function parseFile(file) {
@@ -253,17 +280,23 @@
     state.result.soSiate.forEach(function (s) {
       var key = s.numos + '|SO_SIATE';
       if (haveQ[key]) return;
-      db.quarentena.push({ numos: s.numos, origem: 'SO_SIATE', motivo: 'Tem na SIATE e não tem na LIST', dados: s, createdAt: new Date().toISOString() });
+      db.quarentena.push({ numos: s.numos, origem: 'SO_SIATE', d: compactQ(s, 'SO_SIATE'), createdAt: new Date().toISOString() });
       newQ++;
     });
     state.result.soList.forEach(function (l) {
       var key = l.numos + '|SO_LIST';
       if (haveQ[key]) return;
-      db.quarentena.push({ numos: l.numos, origem: 'SO_LIST', motivo: 'Tem na LIST e não tem na SIATE', dados: l, createdAt: new Date().toISOString() });
+      db.quarentena.push({ numos: l.numos, origem: 'SO_LIST', d: compactQ(l, 'SO_LIST'), createdAt: new Date().toISOString() });
       newQ++;
     });
     db.imports.push({ ts: new Date().toISOString(), filtros: f, congTotal: state.result.cong.length, congGravadas: newQ >= 0 ? congF.length : 0, novasPrincipal: newP, novasQuarentena: newQ });
-    saveDB(db);
+    if (!saveDB(db)) {
+      var kb = 0;
+      try { kb = Math.round(JSON.stringify(db).length / 1024); } catch (e) {}
+      renderAll();
+      alert('NÃO SALVOU: banco local cheio (quota ~5MB; tentativa com aprox. ' + kb + 'KB). Nada foi gravado.\n\nSaídas:\n1) Jogue em partes usando filtros (ex: 1 regional por vez);\n2) Migre para o Supabase (docs/SUPABASE_SCHEMA.sql).');
+      return;
+    }
     renderAll('Banco atualizado: +' + newP + ' na caixa principal, +' + newQ + ' na quarentena (filtros aplicados só na principal).');
   }
 
@@ -296,7 +329,7 @@
     return db.quarentena.filter(function (x) {
       if (!q) return true;
       return String(x.numos).indexOf(q) !== -1 ||
-        String((x.dados && (x.dados.cliente || x.dados.local)) || '').toUpperCase().indexOf(q) !== -1;
+        String(qget(x, 'cli') || qget(x, 'cid') || qget(x, 'loc') || '').toUpperCase().indexOf(q) !== -1;
     });
   }
 
@@ -368,16 +401,17 @@
         '</tr></thead><tbody>';
       sliceQ.forEach(function (x) {
         var det = '';
-        if (x.origem === 'SO_SIATE' && x.dados) {
-          det = 'CODSERV ' + esc(x.dados.codserv || '—') + ' • ' + esc(x.dados.cidade || '') + ' • ' + esc(x.dados.cliente || '') + ' • REG ' + esc(x.dados.codreg || '—');
-        } else if (x.dados) {
-          det = 'CODSERV ' + esc(x.dados.codserv || '—') + ' • ' + esc(x.dados.local || '') + ' • ' + esc(x.dados.descricao || '').slice(0, 60);
+        if (x.origem === 'SO_SIATE') {
+          det = 'CODSERV ' + esc(qget(x, 'c') || '—') + ' • ' + esc(qget(x, 'cid')) + ' • ' + esc(qget(x, 'cli')) + ' • REG ' + esc(qget(x, 'r') || '—');
+        } else {
+          det = 'CODSERV ' + esc(qget(x, 'c') || '—') + ' • ' + esc(qget(x, 'loc')) + ' • ' + esc(qget(x, 'desc'));
         }
         var dis = state.isAdmin ? '' : ' disabled title="Somente admin"';
+        var motivo = x.motivo || (x.origem === 'SO_SIATE' ? 'Tem na SIATE e não tem na LIST' : 'Tem na LIST e não tem na SIATE');
         hq += '<tr>' +
           '<td><span class="os-id">' + esc(x.numos) + '</span></td>' +
           '<td>' + (x.origem === 'SO_SIATE' ? '<span class="badge badge-yellow">SÓ SIATE</span>' : '<span class="badge badge-red">SÓ LIST</span>') + '</td>' +
-          '<td class="mono" style="font-size:11px">' + esc(x.motivo) + '</td>' +
+          '<td class="mono" style="font-size:11px">' + esc(motivo) + '</td>' +
           '<td style="font-size:12px">' + det + '</td>' +
           '<td style="white-space:nowrap"><button class="btn-small ok" data-act="aprovar" data-os="' + esc(x.numos) + '" data-org="' + esc(x.origem) + '"' + dis + '>Aprovar</button> ' +
           '<button class="btn-small danger" data-act="reprovar" data-os="' + esc(x.numos) + '" data-org="' + esc(x.origem) + '"' + dis + '>Reprovar</button></td></tr>';
@@ -445,18 +479,19 @@
         var ix = db.quarentena.findIndex(function (x) { return x.numos === os && x.origem === org; });
         if (ix !== -1) {
           var item = db.quarentena.splice(ix, 1)[0];
-          var d = item.dados || {};
           if (!db.principal.find(function (x) { return x.numos === os; })) {
             db.principal.push({
-              numos: os, codserv: d.codserv || '', datasol: d.datasol || d.solicitacao || '', dataISO: d.dataISO || '',
-              codreg: d.codreg || '', regional: d.regional || '', cidade: d.cidade || d.local || '',
-              cliente: d.cliente || '', tel1: d.tel1 || d.telefone || '', tel2: d.tel2 || '',
-              obs: d.obs || '', dscsvc: d.dscsvc || d.descricao || '',
+              numos: os, codserv: qget(item, 'c'), datasol: '', dataISO: qget(item, 'd'),
+              codreg: qget(item, 'r'), regional: REGIONAL_NOME[qget(item, 'r')] || '',
+              cidade: qget(item, 'cid') || qget(item, 'loc'),
+              cliente: qget(item, 'cli'), tel1: qget(item, 't'),
+              tel2: '', obs: '', dscsvc: qget(item, 'desc'),
               statusDemanda: 'A INICIAR', responsavel: null, origem: 'QUARENTENA_APROVADA',
               createdAt: new Date().toISOString(),
             });
           }
-          saveDB(db); renderAll('OS ' + os + ' aprovada → caixa principal.');
+          if (!saveDB(db)) { alert('NÃO SALVOU: banco local cheio (quota ~5MB).'); return; }
+          renderAll('OS ' + os + ' aprovada → caixa principal.');
         }
       }
       if (act === 'reprovar') {
@@ -494,6 +529,18 @@
     if (bp) bp.addEventListener('click', processAndPreview);
     var bb = $('btn-tobank');
     if (bb) bb.addEventListener('click', pushToDB);
+    var bf = $('btn-clearfilters');
+    if (bf) bf.addEventListener('click', function () {
+      document.querySelectorAll('.check-pill').forEach(function (pill) {
+        var inp = pill.querySelector('input');
+        inp.checked = true; pill.classList.add('on');
+      });
+      if ($('f-codserv')) $('f-codserv').value = '';
+      if ($('f-cidade')) $('f-cidade').value = '';
+      if ($('f-dini')) $('f-dini').value = '';
+      if ($('f-dfim')) $('f-dfim').value = '';
+      if (state.result) processAndPreview();
+    });
     var bc = $('btn-clear');
     if (bc) bc.addEventListener('click', function () {
       if (!confirm('Limpar banco local (caixa + quarentena)?')) return;
