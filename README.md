@@ -32,7 +32,18 @@ Abrir `http://localhost:8080/login.html`:
 - admin → `admin@sistema` / `admin123` (importa, aprova quarentena)
 - equipe → `equipe@sistema` / `equipe123` (caixa principal)
 
-Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cidade, período) → **Comparar bases** → **Jogar no banco** (filtros valem p/ principal; quarentena recebe tudo) → gerenciar quarentena e caixa.
+Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cidade, período) → **Comparar bases** → **Jogar no banco** (incremental: soma sem apagar; preserva status/responsável; reprovada não volta; quarentena virada congruente é promovida) → gerenciar quarentena e caixa.
+
+## Novidades
+
+- **Quarentena em massa (admin):** Aprovar filtrados → caixa, Apagar filtrados, Apagar TUDO (dupla confirmação; arquiva como reprovada p/ não voltar; caixa nunca é tocada).
+- **Duplicadas na importação:** OS congruente que **já está na caixa** vai para a quarentena como **JÁ NA CAIXA** para o admin revisar (opção “Já está na caixa → quarentena”, pode desmarcar para só ignorar).
+- **Caixa individual + privacidade:** usuário trabalha em **Minha caixa** × **Disponíveis**; ninguém (exceto admin) vê nem as OS nem as quantidades dos outros. Métrica própria de **encerradas hoje** na caixa; admin vê **Hoje ✅ / Em mãos / Total** por pessoa em Acompanhar usuários.
+- **Métricas (admin):** nova tela **📈 Métricas** — encerradas por usuário e por dia em Hoje, Últimos 7/30 dias, Este mês ou período personalizado, com export CSV. A prévia do Comparar bases agora avisa **vítimas do filtro** e **quarentena zerada suspeita** (mesmo arquivo nos 2 campos).
+- **Conflitos SIATE×LIST:** OS nas duas bases com **serviço diferente** não vai direto p/ caixa — abre **modal** de incongruências e vai para a aba **⚔️ Conflitos** da quarentena, com valores lado a lado e botões **P/ caixa (SIATE)** / **P/ caixa (LIST)** / Reprovar. Abas separadas: Conflitos, Só SIATE, Só LIST, Já na caixa.
+- **Distribuição automática (admin):** tela **🚚 Distribuição** — ativa/desativa, cota padrão igual p/ todos + cota individual por usuário (0 pula). Quem zera as abertas recebe sozinho (mais antigas primeiro): no login, na importação, ao encerrar a última e ao liberar. Admins não recebem.
+- **Ordenação da caixa:** select + clique no cabeçalho **NUM OS / DATA SOL** (mais antigas ↔ mais novas) — ideal p/ importação diária.
+- **Multiusuário:** admin cria contas em **Acompanhar usuários** (local `sad_users_v1`); banco compartilhado no site via **Supabase** — ver `docs/DEPLOY_SUPABASE.md` + `js/config.js` (enquanto vazio, roda local).
 
 ## Estrutura
 
@@ -41,7 +52,8 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 ├── login.html          # login demo
 ├── css/style.css       # identidade (mesmas vars do carregamentoepdpb)
 ├── js/theme.js         # dark/light (key sad-theme)
-├── js/auth.js          # demo local (plugável Supabase)
+├── js/auth.js          # multiusuário local sad_users_v1 (plugável Supabase Auth)
+├── js/config.js        # SUPABASE_URL + ANON_KEY (vazio = modo local)
 ├── js/app.js           # parse SheetJS, sanitiza, compara NUMOS, banco localStorage
 ├── BASE/               # bases de exemplo (do remoto)
 ├── docs/BRIEFING.md
@@ -49,4 +61,4 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 └── data/               # (legado) usar BASE/
 ```
 
-Banco atual: `localStorage sad_db_v1`. Schema produtivo em `docs/SUPABASE_SCHEMA.sql`.
+Banco atual: `localStorage sad_db_v1`. Schema produtivo em `docs/SUPABASE_SCHEMA.sql` + passo a passo em `docs/DEPLOY_SUPABASE.md`.

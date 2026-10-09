@@ -312,6 +312,28 @@ body {
 }
 .search-btn:hover { filter: brightness(1.07); }
 .status-filter { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.q-tabs { display: flex; gap: 8px; flex-wrap: wrap; padding: 14px 22px 0; }
+
+/* Modal de incongruências */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(4, 7, 12, .62); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-card {
+  width: 100%; max-width: 580px; max-height: 86vh; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; box-shadow: 0 24px 70px rgba(0, 0, 0, .5);
+}
+.modal-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+.modal-body { font-size: 13px; color: var(--text2); line-height: 1.7; }
+.modal-body b { color: var(--text); }
+.modal-row {
+  font-family: var(--mono); font-size: 12px; color: var(--text);
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 7px; padding: 7px 12px; margin-top: 6px;
+}
+.modal-btns { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
 .chip {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 20px; padding: 7px 15px; font-size: 12.5px; font-weight: 500; color: var(--text2);

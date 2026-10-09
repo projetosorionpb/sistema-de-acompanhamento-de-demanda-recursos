@@ -16,6 +16,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/theme.js"></script>
 </head>
@@ -37,8 +38,10 @@
       <button class="nav-item" data-nav="caixa"><span class="ni">📥</span>Caixa principal<span class="nb" id="tab-n-p">0</span></button>
       <button class="nav-item admin-only" data-nav="quarentena"><span class="ni">🛡️</span>Quarentena<span class="nb" id="tab-n-q">0</span></button>
       <button class="nav-item admin-only" data-nav="acompanhar"><span class="ni">👥</span>Acompanhar usuários</button>
+      <button class="nav-item admin-only" data-nav="metricas"><span class="ni">📈</span>Métricas</button>
       <div class="nav-label admin-only">Administração</div>
       <button class="nav-item admin-only" data-nav="importar"><span class="ni">📤</span>Importar bases</button>
+      <button class="nav-item admin-only" data-nav="distribuir"><span class="ni">🚚</span>Distribuição</button>
       <button class="nav-item" data-nav="resumo"><span class="ni">📊</span>Resumo</button>
     </nav>
     <div class="sidebar-foot">
@@ -75,6 +78,40 @@
           <div class="alert-box">👋 Você está como <b>usuário</b>. A importação das bases e a quarentena são do <b>admin</b>. Use a <b>Caixa principal</b> para assumir demandas e atualizar o status.</div>
         </div>
       </div>
+
+      <!-- ═══ VIEW: DISTRIBUIÇÃO (admin) ═══ -->
+      <section id="view-distribuir" style="display:none">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon">🚚</div>
+            <div>
+              <div class="panel-title">Distribuição automática</div>
+              <div class="panel-subtitle">Usuário sem OS aberta recebe sozinho · ao zerar, carrega mais · quantidade igual ou por pessoa</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="filter-grid" style="grid-template-columns:1fr 1fr 1fr">
+              <div class="field">
+                <label>Status</label>
+                <div class="check-row">
+                  <label class="check-pill" id="pill-dist-enabled"><input type="checkbox" id="dist-enabled">Automática ativada</label>
+                </div>
+              </div>
+              <div class="field">
+                <label>Qtd padrão p/ todos</label>
+                <input type="number" id="dist-qty" min="0" max="500" step="1" placeholder="10">
+              </div>
+              <div class="field">
+                <label>Manual</label>
+                <button class="btn-ghost" id="btn-dist-now" style="padding:8px 14px;font-size:12px;width:100%">🚚 Distribuir agora</button>
+              </div>
+            </div>
+            <div id="dist-tbl" style="margin-top:14px"></div>
+            <div class="panel-hint">Regra: vale para contas <b>usuário</b> (admins não recebem). Quem está com <b>zero OS aberta</b> (nada ou tudo ENCERRADO) ganha a cota das <b>mais antigas disponíveis</b>. Qtd individual vazia = usa o padrão; 0 = pula a pessoa.</div>
+            <div class="log-box" id="dist-log">Distribuição nunca executada neste navegador.</div>
+          </div>
+        </div>
+      </section>
 
       <!-- ═══ VIEW: RESUMO ═══ -->
       <section id="view-resumo" style="display:none">
@@ -114,6 +151,7 @@
               </div>
             </div>
             <div class="panel-hint">Sanitização SIATE: NUMOS só-dígitos (chave), CODSERV inteiro, DATASOL→ISO, CODREG 1=LESTE 2=CENTRO 3=OESTE, textos trim/upper, telefones só-dígitos, remove sem-NUMOS e duplicadas. LIST: OS normalizada, remove vazias/duplicadas.</div>
+            <div class="alert-box" style="margin-top:12px">🔁 <b>Importação incremental:</b> cada “Jogar no banco” <b>soma</b> — o que já está na caixa/quarentena é <b>preservado</b> (status e responsável não são sobrescritos). OS reprovada não volta. Se uma OS da quarentena virar congruente, ela é <b>promovida automaticamente</b> para a caixa. Com a opção “Já está na caixa → quarentena” marcada, OS repetida na importação vai para a quarentena como <b>JÁ NA CAIXA</b> para o admin revisar (em vez de ser só ignorada).</div>
           </div>
         </div>
 
@@ -151,6 +189,12 @@
               <div class="field">
                 <label>Data sol — fim</label>
                 <input type="date" id="f-dfim">
+              </div>
+              <div class="field">
+                <label>Duplicadas na importação</label>
+                <div class="check-row">
+                  <label class="check-pill on"><input type="checkbox" id="f-dup-quar" checked>Já está na caixa → quarentena</label>
+                </div>
               </div>
             </div>
             <div class="btn-row">
@@ -203,6 +247,15 @@
                 <label>Responsável</label>
                 <select id="f2-resp"><option value="">Todos</option><option value="__NONE__">Sem responsável</option></select>
               </div>
+              <div class="field">
+                <label>Ordenar por</label>
+                <select id="f2-sort">
+                  <option value="data-desc">Data SOL · mais novas primeiro</option>
+                  <option value="data-asc">Data SOL · mais antigas primeiro</option>
+                  <option value="os-desc">NUM OS · maior primeiro</option>
+                  <option value="os-asc">NUM OS · menor primeiro</option>
+                </select>
+              </div>
             </div>
             <div class="btn-row" style="margin-top:12px">
               <button class="btn-ghost" id="btn-f2-clear" style="padding:8px 14px;font-size:12px">✖️ Limpar</button>
@@ -225,7 +278,15 @@
           <span class="chip" data-st="PENDENTE">Pendente</span>
           <span class="chip" data-st="ENCERRADO">Encerrado</span>
         </div>
+        <div class="status-filter" id="scope-row" style="display:none">
+          <span class="chip active" data-scope="mine">🙋 Minha caixa <b id="scope-n-mine">0</b></span>
+          <span class="chip" data-scope="pool">📦 Disponíveis <b id="scope-n-pool">0</b></span>
+        </div>
+        <div class="panel panel-slim" id="my-stats-panel" style="display:none">
+          <div class="panel-body" id="my-stats" style="font-size:13px"></div>
+        </div>
         <div class="panel"><div class="panel-body" id="tbl-principal"></div></div>
+        <div class="panel-hint" style="margin:-8px 2px 20px">💡 Dica: clique em <b>NUM OS</b> ou <b>DATA SOL</b> no cabeçalho da tabela para alternar crescente/decrescente. Com importação diária, use “mais novas primeiro” ou “mais antigas primeiro”.</div>
       </section>
 
       <!-- ═══ VIEW: QUARENTENA (admin) ═══ -->
@@ -235,7 +296,7 @@
             <div class="filter-grid">
               <div class="field">
                 <label>Origem</label>
-                <select id="f3-origem"><option value="">Todas</option><option value="SO_SIATE">Só SIATE</option><option value="SO_LIST">Só LIST</option></select>
+                <select id="f3-origem"><option value="">Todas</option><option value="SO_SIATE">Só SIATE</option><option value="SO_LIST">Só LIST</option><option value="JA_NA_CAIXA">Já na caixa (duplicada)</option></select>
               </div>
               <div class="field">
                 <label>Serviço</label>
@@ -258,19 +319,125 @@
               <div class="panel-title">Quarentena — divergências</div>
               <div class="panel-subtitle">Tem em uma base e não tem na outra · admin aprova (→ caixa) ou reprova</div>
             </div>
+            <span class="panel-step" id="q-count">0 itens</span>
+          </div>
+          <div class="q-tabs" id="q-tabs">
+            <span class="chip" data-qtab="">Todas <b id="q-n-all">0</b></span>
+            <span class="chip" data-qtab="DIVERGENTE">⚔️ Conflitos <b id="q-n-div">0</b></span>
+            <span class="chip" data-qtab="SO_SIATE">Só SIATE <b id="q-n-ssi">0</b></span>
+            <span class="chip" data-qtab="SO_LIST">Só LIST <b id="q-n-sli">0</b></span>
+            <span class="chip" data-qtab="JA_NA_CAIXA">Já na caixa <b id="q-n-ja">0</b></span>
           </div>
           <div class="panel-body" id="tbl-quarentena"></div>
+          <div class="panel-body admin-only" style="padding-top:0">
+            <div class="btn-row" style="margin-top:0">
+              <button class="btn-ghost" id="btn-q-aprovar" style="padding:8px 14px;font-size:12px">✅ Aprovar filtrados → caixa</button>
+              <button class="btn-ghost" id="btn-q-apagar" style="padding:8px 14px;font-size:12px">🗑️ Apagar filtrados</button>
+              <button class="btn-ghost" id="btn-q-limpar" style="padding:8px 14px;font-size:12px;border-color:var(--red);color:var(--red)">🧹 Apagar TUDO da quarentena</button>
+            </div>
+            <div class="panel-hint">Em massa: “filtrados” respeita origem/serviço/busca acima. “Apagar” arquiva como reprovada para <b>não voltar</b> na próxima importação. A caixa principal <b>nunca</b> é tocada por esses botões.</div>
+        </div>
+      </section>
+
+      <!-- ═══ VIEW: MÉTRICAS (admin) ═══ -->
+      <section id="view-metricas" style="display:none">
+        <div class="panel panel-slim">
+          <div class="panel-body">
+            <div class="status-filter" id="m-presets">
+              <span class="chip active" data-mp="hoje">Hoje</span>
+              <span class="chip" data-mp="7d">Últimos 7 dias</span>
+              <span class="chip" data-mp="30d">Últimos 30 dias</span>
+              <span class="chip" data-mp="mes">Este mês</span>
+              <span class="chip" data-mp="custom">Personalizado</span>
+            </div>
+            <div class="filter-grid" style="margin-top:10px">
+              <div class="field">
+                <label>De</label>
+                <input type="date" id="m-dini">
+              </div>
+              <div class="field">
+                <label>Até</label>
+                <input type="date" id="m-dfim">
+              </div>
+              <div class="field">
+                <label>Usuário (tabela diária)</label>
+                <select id="m-user"><option value="">Todos</option></select>
+              </div>
+              <div class="field">
+                <label>Exportar</label>
+                <div style="display:flex;gap:8px">
+                  <button class="btn-ghost" id="m-export" style="padding:8px 14px;font-size:12px;flex:1">⬇ CSV</button>
+                </div>
+              </div>
+            </div>
+            <div class="panel-hint" id="m-range-label"></div>
+          </div>
+        </div>
+        <div class="stats-grid" id="m-kpis">
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green">✅</div><div class="stat-label">Encerradas no período</div></div><div class="stat-value" id="m-k-total" style="color:var(--green)">0</div><div class="stat-sub" id="m-k-range">—</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-blue">👥</div><div class="stat-label">Usuários ativos</div></div><div class="stat-value" id="m-k-ativos">0</div><div class="stat-sub">encerraram ≥1 no período</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow">📦</div><div class="stat-label">Em mãos (geral)</div></div><div class="stat-value" id="m-k-maos">0</div><div class="stat-sub">não-encerradas na caixa</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon">👤</div>
+            <div>
+              <div class="panel-title">Por usuário</div>
+              <div class="panel-subtitle">Encerradas no período, em mãos e total na caixa</div>
+            </div>
+          </div>
+          <div class="panel-body" id="m-tbl-user"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon">📅</div>
+            <div>
+              <div class="panel-title">Por dia</div>
+              <div class="panel-subtitle" id="m-day-sub">Encerradas por dia no período</div>
+            </div>
+          </div>
+          <div class="panel-body" id="m-tbl-day"></div>
         </div>
       </section>
 
       <!-- ═══ VIEW: ACOMPANHAR USUÁRIOS (admin) ═══ -->
       <section id="view-acompanhar" style="display:none">
+        <div class="panel admin-only">
+          <div class="panel-header">
+            <div class="panel-icon">🔑</div>
+            <div>
+              <div class="panel-title">Usuários e acessos</div>
+              <div class="panel-subtitle">Até ~10 usuários + ~6 admins · no Supabase vira Auth real (ver docs/DEPLOY_SUPABASE.md)</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="filter-grid" style="grid-template-columns:1.4fr 1fr 1fr auto">
+              <div class="field">
+                <label>E-mail</label>
+                <input type="email" id="new-user-email" placeholder="pessoa@empresa.com" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>Senha</label>
+                <input type="text" id="new-user-pass" placeholder="mín. 6 caracteres" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>Perfil</label>
+                <select id="new-user-role"><option value="usuario">usuário</option><option value="admin">admin</option></select>
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button class="btn-ghost" id="btn-user-add" style="padding:8px 14px;font-size:12px;width:100%">＋ Criar</button>
+              </div>
+            </div>
+            <div id="tbl-usuarios" style="margin-top:14px"></div>
+          </div>
+        </div>
         <div class="panel">
           <div class="panel-header">
             <div class="panel-icon">👥</div>
             <div>
               <div class="panel-title">Acompanhar usuários</div>
-              <div class="panel-subtitle">Quais OS estão com quais pessoas e em qual status</div>
+              <div class="panel-subtitle">Quais OS estão com quais pessoas, em qual status e quantas encerraram hoje/total (só admin vê)</div>
             </div>
           </div>
           <div class="panel-body" id="tbl-acompanhar"></div>
@@ -278,6 +445,19 @@
       </section>
 
       <footer class="site-footer">Feito por <strong>Valdeci Nunes</strong></footer>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de incongruências (conflitos SIATE × LIST) -->
+<div class="modal-overlay" id="modal-div" style="display:none">
+  <div class="modal-card">
+    <div class="modal-title" id="modal-div-title">✔ Comparação pronta</div>
+    <div class="modal-body" id="modal-div-body"></div>
+    <div class="modal-btns">
+      <button class="btn-ghost" id="modal-btn-confl" style="padding:10px 16px;font-size:12.5px">Revisar conflitos</button>
+      <button class="btn-ghost" id="modal-btn-quar" style="padding:10px 16px;font-size:12.5px">Ver quarentena</button>
+      <button class="btn-primary" id="modal-btn-ok" style="flex:1;min-width:140px">Entendi</button>
     </div>
   </div>
 </div>
