@@ -1,8 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Engeselt">
-  <!-- arco superior (amarelo) -->
-  <path d="M20.5 74.4 A42 42 0 1 1 101.6 54.1" fill="none" stroke="#F5B301" stroke-width="17" stroke-linecap="round"/>
-  <!-- arco inferior (cinza) -->
-  <path d="M101.6 65.9 A42 42 0 0 1 18.4 65.9" fill="none" stroke="#808285" stroke-width="17" stroke-linecap="round"/>
-  <!-- raio central -->
-  <path d="M30 78 L64 42 L56.5 64 L88 56.5 L46 96 L54 73 Z" fill="#F5B301"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="Engeselt">
+  <!-- Arco superior amarelo; abertura inferior direita conforme a marca. -->
+  <path fill="#F5B900" d="
+    M 0 271
+    C 15 160, 73 65, 165 22
+    C 244 -15, 331 13, 380 75
+    C 395 94, 402 124, 400 177
+    L 302 200
+    C 295 183, 286 165, 272 149
+    C 251 125, 227 111, 208 118
+    C 191 124, 190 146, 184 170
+    C 177 198, 156 213, 126 228
+    C 86 247, 40 260, 0 271 Z"/>
+
+  <!-- Raio central amarelo, integrado visualmente ao arco. -->
+  <path fill="#F5B900" d="
+    M 207 119
+    C 213 112, 219 122, 222 133
+    L 237 184
+    L 287 167
+    C 299 163, 307 173, 300 184
+    L 265 252
+    C 258 265, 248 268, 237 256
+    L 185 203
+    C 180 198, 181 190, 187 184
+    L 199 170
+    L 202 130
+    C 203 124, 204 121, 207 119 Z"/>
+
+  <!-- Arco inferior cinza; fundo permanece transparente. -->
+  <path d="M 91 270 C 138 329, 190 351, 245 344 C 295 338, 337 309, 365 270"
+        fill="none" stroke="#858585" stroke-width="47" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
