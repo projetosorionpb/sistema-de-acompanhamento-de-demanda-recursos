@@ -14,6 +14,7 @@
     view: 'caixa', search: '', statusFilter: 'TODOS',
     cf: { reg: '', codserv: '', cidade: '', dini: '', dfim: '', resp: '' }, // filtros da caixa
     metrics: { preset: 'hoje', dini: '', dfim: '', user: '' }, // métricas do admin
+    resumo: { preset: 'hoje', dini: '', dfim: '' }, // período do resumo do usuário
     scope: 'mine', // usuário: 'mine' (minha caixa) | 'pool' (disponíveis); admin vê tudo
     sort: { key: 'data-desc' }, // data-desc | data-asc | os-desc | os-asc (clicável no th + select)
     qf: { origem: '', codserv: '' }, // filtros da quarentena
@@ -702,12 +703,27 @@
 
   // ---------- resumo pessoal do usuário (quantas OS, por status) ----------
   function setTxt(id, v) { var e = $(id); if (e) e.textContent = v; }
+  // Período do resumo (mesma lógica das Métricas, mas estado próprio).
+  function resumoRange() {
+    var tk = todayKey(), p = (state.resumo && state.resumo.preset) || 'hoje', ini, fim;
+    if (p === '7d') { ini = addDaysStr(tk, -6); fim = tk; }
+    else if (p === '30d') { ini = addDaysStr(tk, -29); fim = tk; }
+    else if (p === 'mes') { ini = tk.slice(0, 7) + '-01'; fim = tk; }
+    else if (p === 'custom') {
+      ini = (state.resumo.dini || tk); fim = (state.resumo.dfim || tk);
+      if (ini > fim) { var t = ini; ini = fim; fim = t; }
+    }
+    else { ini = tk; fim = tk; }
+    return { ini: ini, fim: fim };
+  }
   function renderResumoUser(db) {
     var adminGrid = $('panel-resumo'), userGrid = $('panel-resumo-user');
     if (!adminGrid || !userGrid) return;
-    if (state.isAdmin) { adminGrid.style.display = ''; userGrid.style.display = 'none'; return; }
-    adminGrid.style.display = 'none'; userGrid.style.display = '';
-    var mine = 0, pool = 0, ini = 0, and = 0, pen = 0, enc = 0, hoje = 0, tk = todayKey();
+    var filtro = $('resumo-filtro');
+    if (state.isAdmin) { adminGrid.style.display = ''; userGrid.style.display = 'none'; if (filtro) filtro.style.display = 'none'; return; }
+    adminGrid.style.display = 'none'; userGrid.style.display = ''; if (filtro) filtro.style.display = '';
+    var mine = 0, pool = 0, ini = 0, and = 0, pen = 0, enc = 0, encPer = 0;
+    var r = resumoRange();
     db.principal.forEach(function (p) {
       if (!p.responsavel) { pool++; return; }
       if (!isMine(p)) return;
@@ -716,11 +732,25 @@
       else if (p.statusDemanda === 'EM ANDAMENTO') and++;
       else if (p.statusDemanda === 'PENDENTE') pen++;
       else if (p.statusDemanda === 'ENCERRADO') enc++;
-      if (p.encerradoEm && dayKey(p.encerradoEm) === tk) hoje++;
+      if (p.encerradoEm) {
+        var dk = dayKey(p.encerradoEm);
+        if (dk && dk >= r.ini && dk <= r.fim) encPer++;
+      }
     });
     setTxt('ur-total', mine); setTxt('ur-ini', ini); setTxt('ur-and', and);
-    setTxt('ur-pen', pen); setTxt('ur-enc', enc); setTxt('ur-hoje', hoje);
+    setTxt('ur-pen', pen); setTxt('ur-enc', enc); setTxt('ur-periodo', encPer);
     setTxt('ur-pool', pool);
+    // rótulo + controles do período
+    var sub = $('ur-periodo-sub');
+    if (sub) sub.textContent = (r.ini === r.fim) ? 'em ' + r.ini : r.ini + ' a ' + r.fim;
+    var rl = $('r-range-label');
+    if (rl) rl.textContent = 'Período: ' + r.ini + ' a ' + r.fim + ' · as demais contagens são o estado atual da sua caixa.';
+    var di = $('r-dini'), df = $('r-dfim');
+    if (di && document.activeElement !== di) di.value = state.resumo.dini || '';
+    if (df && document.activeElement !== df) df.value = state.resumo.dfim || '';
+    document.querySelectorAll('#r-presets [data-rp]').forEach(function (c) {
+      c.classList.toggle('active', c.getAttribute('data-rp') === state.resumo.preset);
+    });
   }
 
   // ---------- minha caixa: contadores + métrica do dia (usuário) ----------
@@ -1534,6 +1564,23 @@
     });
     var mex = $('m-export');
     if (mex) mex.addEventListener('click', exportMetricasCSV);
+    // período do resumo do usuário
+    document.querySelectorAll('#r-presets [data-rp]').forEach(function (c) {
+      c.addEventListener('click', function () {
+        state.resumo.preset = c.getAttribute('data-rp');
+        renderResumoUser(loadDB());
+      });
+    });
+    ['r-dini', 'r-dfim'].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      el.addEventListener('change', function () {
+        state.resumo.dini = ($('r-dini') || {}).value || '';
+        state.resumo.dfim = ($('r-dfim') || {}).value || '';
+        state.resumo.preset = 'custom';
+        renderResumoUser(loadDB());
+      });
+    });
     // abas da quarentena (telas separadas por tipo) — sincronizam com o select
     document.querySelectorAll('.chip[data-qtab]').forEach(function (c) {
       c.addEventListener('click', function () {
