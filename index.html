@@ -409,11 +409,11 @@
             <div class="panel-icon">🔑</div>
             <div>
               <div class="panel-title">Usuários e acessos</div>
-              <div class="panel-subtitle">Até ~10 usuários + ~6 admins · no Supabase vira Auth real (ver docs/DEPLOY_SUPABASE.md)</div>
+              <div class="panel-subtitle">Contas no Supabase Auth · crie em Authentication → Users e defina o papel em Table Editor → profiles</div>
             </div>
           </div>
           <div class="panel-body">
-            <div class="filter-grid" style="grid-template-columns:1.4fr 1fr 1fr auto">
+            <div class="filter-grid" id="user-create-grid" style="grid-template-columns:1.4fr 1fr 1fr auto">
               <div class="field">
                 <label>E-mail</label>
                 <input type="email" id="new-user-email" placeholder="pessoa@empresa.com" autocomplete="off">

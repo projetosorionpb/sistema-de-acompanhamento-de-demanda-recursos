@@ -4,7 +4,6 @@
 (function () {
   'use strict';
 
-  var DB_KEY = 'sad_db_v1';
   var PAGE_SIZE = 50;
   var REGIONAL_NOME = { 1: 'LESTE', 2: 'CENTRO', 3: 'OESTE' };
   var STATUS_LIST = ['A INICIAR', 'EM ANDAMENTO', 'PENDENTE', 'ENCERRADO'];
@@ -124,25 +123,18 @@
   }
   function todayKey() { return dayKey(new Date().toISOString()); }
 
-  // ---------- DB ----------
-  // Online (Supabase): cache compartilhado em memória (js/db.js).
-  // Local: localStorage sad_db_v1.
+  // ---------- DB (somente nuvem: tudo no Supabase via js/db.js) ----------
   function loadDB() {
     if (window.SADDB) {
       try { return SADDB.load(); } catch (e) {}
     }
-    try {
-      var d = JSON.parse(localStorage.getItem(DB_KEY) || 'null');
-      if (d && d.principal && d.quarentena) return d;
-    } catch (e) {}
     return { principal: [], quarentena: [], imports: [], reproved: [] };
   }
   function saveDB(db) {
     if (window.SADDB) {
       try { return SADDB.save(db); } catch (e) {}
     }
-    try { localStorage.setItem(DB_KEY, JSON.stringify(db)); return true; }
-    catch (e) { return false; } // quota excedida (~5MB) — pushToDB avisa
+    return false;
   }
   // Quando o banco é compartilhado, re-busca o servidor após ações que afetam
   // outros usuários (pegar/liberar/trocar status) para ver a caixa atualizada.
@@ -154,7 +146,7 @@
     } catch (e) {}
   }
 
-  // ---------- quarentena compacta (cabe na quota do localStorage) ----------
+  // ---------- quarentena compacta (objeto leve p/ a coluna jsonb `dados`) ----------
   // SO_SIATE: {n,c,d,r,cid,cli,t} | SO_LIST: {n,c,desc,loc,t}
   // SO_SIATE e JA_NA_CAIXA carregam campos SIATE; SO_LIST carrega campos LIST.
   function compactQ(dados, origem) {
@@ -497,7 +489,7 @@
       var kb = 0;
       try { kb = Math.round(JSON.stringify(db).length / 1024); } catch (e) {}
       renderAll();
-      alert('NÃO SALVOU: banco local cheio (quota ~5MB; tentativa com aprox. ' + kb + 'KB). Nada foi gravado.\n\nSaídas:\n1) Jogue em partes usando filtros (ex: 1 regional por vez);\n2) Migre para o Supabase (docs/SUPABASE_SCHEMA.sql).');
+      alert('NÃO SALVOU: banco indisponível (Supabase). Nada foi gravado.\n\nVerifique a conexão e a config (js/config.js); recarregue a página.');
       return;
     }
     // Distribuição automática pós-importação (quem zerou, recebe a cota)
@@ -879,7 +871,7 @@
         added++;
       }
     });
-    if (!saveDB(db)) { alert('NÃO SALVOU: banco local cheio (quota ~5MB).'); return { added: 0, skipped: skipped }; }
+    if (!saveDB(db)) { alert('NÃO SALVOU: banco indisponível (Supabase).'); return { added: 0, skipped: skipped }; }
     return { added: added, skipped: skipped };
   }
   // Aprova um conflito escolhendo o lado (SIATE ou LIST) como dado da caixa.
@@ -906,7 +898,7 @@
         createdAt: new Date().toISOString(),
       });
     }
-    if (!saveDB(db)) { alert('NÃO SALVOU: banco local cheio (quota ~5MB).'); return; }
+    if (!saveDB(db)) { alert('NÃO SALVOU: banco indisponível (Supabase).'); return; }
     renderAll('OS ' + os + ' liberada p/ caixa com dados da ' + side + '.');
   }
   function removeQuarList(list, archive) {
@@ -930,7 +922,7 @@
         }
       });
     }
-    if (!saveDB(db)) { alert('NÃO SALVOU: banco local cheio (quota ~5MB).'); return 0; }
+    if (!saveDB(db)) { alert('NÃO SALVOU: banco indisponível (Supabase).'); return 0; }
     return removed.length;
   }
 
@@ -1153,17 +1145,20 @@
   }
 
   // ---------- distribuição automática (admin configura, sistema entrega) ----------
-  var CFG_KEY = 'sad_cfg_v1';
+  // Config compartilhada na nuvem (tabela `config`), via js/db.js.
+  function defaultCfg() { return { distrib: { enabled: false, qty: 10, per: {} } }; }
   function loadCfg() {
     try {
-      var c = JSON.parse(localStorage.getItem(CFG_KEY) || 'null');
-      if (c && c.distrib) return c;
+      if (window.SADDB) {
+        var c = SADDB.loadCfg();
+        if (c && c.distrib) return c;
+      }
     } catch (e) {}
-    return { distrib: { enabled: false, qty: 10, per: {} } };
+    return defaultCfg();
   }
   function saveCfg(c) {
-    try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); return true; }
-    catch (e) { return false; }
+    try { if (window.SADDB) return SADDB.saveCfg(c); } catch (e) {}
+    return false;
   }
   function distQtyFor(email, cfg) {
     cfg = cfg || (loadCfg().distrib || {});
@@ -1359,30 +1354,23 @@
     }
   }
 
-  // ---------- usuários locais (10 users + 6 admins; Supabase vira Auth real) ----------
+  // ---------- usuários (Supabase Auth: gestão pelo Dashboard) ----------
   function renderUsuarios() {
     var el = $('tbl-usuarios');
     if (!el || !state.isAdmin || typeof getUsers !== 'function') return;
     var users = getUsers();
-    var h = '<div class="table-wrap"><table style="min-width:560px"><thead><tr>' +
-      '<th>E-mail</th><th>Perfil</th><th>Criado em</th><th></th>' +
+    var h = '<div class="table-wrap"><table style="min-width:520px"><thead><tr>' +
+      '<th>E-mail</th><th>Perfil</th><th>Criado em</th>' +
       '</tr></thead><tbody>';
     users.forEach(function (u) {
       var me = state.user && String(state.user.email || '').toLowerCase() === String(u.email).toLowerCase();
       h += '<tr><td class="mono">' + esc(u.email) + (me ? ' <span class="badge badge-blue">você</span>' : '') + '</td>' +
         '<td>' + (u.role === 'admin' ? '<span class="badge badge-yellow">ADMIN</span>' : '<span class="badge badge-gray">USUÁRIO</span>') + '</td>' +
-        '<td class="mono" style="font-size:11px">' + esc((u.createdAt || '').slice(0, 10)) + '</td>' +
-        '<td style="white-space:nowrap">' +
-        (me ? '<span class="mono" style="font-size:11px;color:var(--text3)">atual</span>'
-          : '<button class="btn-small" data-act="user-role" data-email="' + esc(u.email) + '">virar ' + (u.role === 'admin' ? 'usuário' : 'admin') + '</button> ' +
-            '<button class="btn-small danger" data-act="user-del" data-email="' + esc(u.email) + '">Excluir</button>') +
-        '</td></tr>';
+        '<td class="mono" style="font-size:11px">' + esc((u.createdAt || '').slice(0, 10)) + '</td></tr>';
     });
     el.innerHTML = h + '</tbody></table></div>' +
-      '<div class="panel-hint">Total: ' + users.length + ' conta(s).' +
-      (window.SADDB && SADDB.enabled()
-        ? ' Online (Supabase): contas e papéis são gerenciados em Authentication → Users e Table Editor → profiles.'
-        : ' Neste navegador. Configure o Supabase (docs/DEPLOY_SUPABASE.md) p/ valer no site todo.') + '</div>';
+      '<div class="panel-hint">' + users.length + ' conta(s) no Supabase. Criar conta, excluir e trocar papel: ' +
+      '<b>Authentication → Users</b> e <b>Table Editor → profiles → role</b>.</div>';
   }
 
   function renderAll(msg) {
@@ -1654,7 +1642,7 @@
               createdAt: new Date().toISOString(),
             });
           }
-          if (!saveDB(db)) { alert('NÃO SALVOU: banco local cheio (quota ~5MB).'); return; }
+          if (!saveDB(db)) { alert('NÃO SALVOU: banco indisponível (Supabase).'); return; }
           renderAll(already ? 'OS ' + os + ' retirada da quarentena (já estava na caixa).' : 'OS ' + os + ' aprovada → caixa principal.');
         }
       }
@@ -1776,7 +1764,7 @@
       var r = autoDistribute(db, null);
       if (r.off) { alert('Ative a distribuição automática primeiro.'); return; }
       if (!r.n) { alert('Ninguém zerado ou sem disponíveis no momento.'); renderDistribuicao(); return; }
-      if (!saveDB(db)) { alert('NÃO SALVOU: banco local cheio (quota ~5MB).'); return; }
+      if (!saveDB(db)) { alert('NÃO SALVOU: banco indisponível (Supabase).'); return; }
       var dl = $('dist-log');
       if (dl) dl.textContent = new Date().toLocaleString('pt-BR') + ' — manual: ' + distSummary(r) + '.';
       renderAll('🚚 Distribuídas ' + r.n + ' OS: ' + distSummary(r) + '.');
@@ -1799,18 +1787,15 @@
     });
     var bc = $('btn-clear');
     if (bc) bc.addEventListener('click', function () {
-      var shared = false;
-      try { shared = !!(window.SADDB && SADDB.enabled()); } catch (e) {}
-      if (shared) {
-        if (!confirm('ATENÇÃO: o banco é COMPARTILHADO. Limpar apaga a caixa + quarentena de TODOS os usuários.')) return;
-        if (!confirm('Confirma mesmo? Essa ação afeta todos.')) return;
-      } else {
-        if (!confirm('Limpar banco local (caixa + quarentena)?')) return;
+      if (!confirm('ATENÇÃO: limpar apaga a caixa + quarentena de TODOS os usuários (banco compartilhado).')) return;
+      if (!confirm('Confirma mesmo? Essa ação afeta todos e não tem volta.')) return;
+      if (!saveDB({ principal: [], quarentena: [], imports: [], reproved: [] })) {
+        alert('Não foi possível limpar: banco indisponível.');
+        return;
       }
-      saveDB({ principal: [], quarentena: [], imports: [], reproved: [] });
       state.result = null; state.siateClean = []; state.listClean = [];
-      $('log').textContent = shared ? 'Banco compartilhado limpo (todos).' : 'Banco local limpo.';
-      renderAll(shared ? 'Banco compartilhado limpo para todos.' : 'Banco limpo.');
+      $('log').textContent = 'Banco limpo.';
+      renderAll('Banco limpo para todos.');
     });
   }
 
@@ -1995,22 +1980,35 @@
     if (!sess) return;
     state.user = sess;
     state.isAdmin = isAdminEmail(sess.email);
-    // Carrega o banco compartilhado (Supabase) se configurado; senão, local.
-    var dbMode = 'local';
+    // Carrega o banco compartilhado (Supabase). Somente nuvem.
+    var dbMode = 'unconfigured';
     try { if (window.SADDB) dbMode = await SADDB.init(); } catch (e0) {}
     state.dbMode = dbMode;
+    try {
+      if (window.SADDB && SADDB.onError) {
+        SADDB.onError(function (m) { alert('Falha ao gravar no banco (Supabase): ' + m + '\nA alteração pode não ter sido salva.'); });
+      }
+    } catch (eE) {}
+    if (dbMode !== 'supabase') {
+      var motivo = dbMode === 'unconfigured'
+        ? 'Supabase não configurado (js/config.js).'
+        : 'Não foi possível carregar o banco no Supabase (conexão, policies ou config).';
+      alert('⚠ ' + motivo + ' O sistema funciona somente com a nuvem — nada será gravado localmente.');
+    }
     try {
       var tb = document.querySelector('.topbar-right');
       if (tb) {
         var modeBadge = document.createElement('span');
-        modeBadge.className = 'badge ' + (dbMode === 'supabase' ? 'badge-green' : 'badge-gray');
-        modeBadge.textContent = dbMode === 'supabase' ? '☁ Compartilhado' : '💾 Local';
+        modeBadge.className = 'badge ' + (dbMode === 'supabase' ? 'badge-green' : (dbMode === 'error' ? 'badge-red' : 'badge-yellow'));
+        modeBadge.textContent = dbMode === 'supabase' ? '☁ Compartilhado' : (dbMode === 'error' ? '⚠ Sem banco' : '⚙ Não configurado');
         modeBadge.title = dbMode === 'supabase'
           ? 'Banco no Supabase: todos os usuários veem a mesma caixa.'
-          : 'Banco só neste navegador (localStorage). Configure o Supabase p/ compartilhar.';
+          : 'Sem banco disponível. Configure/conserte o Supabase (js/config.js).';
         tb.insertBefore(modeBadge, tb.firstChild);
       }
     } catch (eM) {}
+    // Gestão de usuários é pelo Dashboard do Supabase: esconde o formulário de criar.
+    try { var ucg = $('user-create-grid'); if (ucg) ucg.style.display = 'none'; } catch (eG) {}
     var role = sess.role || (state.isAdmin ? 'admin' : 'usuario');
     $('me').textContent = sess.email;
     if ($('role')) $('role').textContent = role;

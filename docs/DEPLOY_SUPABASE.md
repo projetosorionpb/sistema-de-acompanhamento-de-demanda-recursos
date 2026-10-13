@@ -1,6 +1,6 @@
 # Subir o banco no site (Supabase) — passo a passo
 
-> Por que: hoje o banco é `localStorage` (só no seu navegador). Para
+> Por que: login e banco são **somente na nuvem**. Para
 > **10 usuários + 6 admins** usarem o **mesmo site** com a **mesma caixa**,
 > é preciso um banco na nuvem. O projeto já está pronto para o Supabase
 > (gratuito e suficiente para esse porte).
@@ -20,7 +20,7 @@
 2. Abra o arquivo `docs/SUPABASE_SCHEMA.sql` deste repo, copie **tudo**,
    cole no editor e clique **Run** (deve dar *Success*).
 3. Confira em **Table Editor**: existem `demandas`, `quarentena`,
-   `reprovadas`, `importacoes`, `profiles`.
+   `reprovadas`, `importacoes`, `profiles`, `config`.
 
 ## 3. Criar os logins (6 admins + 10 usuários)
 
@@ -45,8 +45,7 @@
    };
    ```
 2. Commit + push. O próximo deploy do site já usa o banco nuvem.
-   > Enquanto `SUPABASE_URL` estiver vazio, o app segue em modo local
-   > (bom para testar sem internet).
+   > `SUPABASE_URL` vazio = app não funcional (sem login/banco). É obrigatório.
 
 ## 5. Publicar o site (escolha uma)
 
@@ -93,20 +92,19 @@ a config já vai no `js/config.js`.
 
 ## 7. Camada de código (onde plugar)
 
-- `js/config.js` — URL + anon key (vazio = modo local).
-- `js/auth.js` — login híbrido: Supabase Auth (nuvem) com fallback para os
-  demos locais (`admin@sistema` / `equipe@sistema`); papel vem de `profiles.role`.
-- `js/db.js` **camada de dados (feito)**: quando há Supabase + sessão, carrega
-  as tabelas para um cache em memória e grava por *diff* (INSERT de novas,
-  UPDATE das alteradas, DELETE das removidas). Sem Supabase, cai no
-  `localStorage` como antes — mesmo comportamento, zero regressão.
+- `js/config.js` — URL + anon key (obrigatório: login e banco são somente nuvem).
+- `js/auth.js` — login Supabase Auth; papel vem de `profiles.role`. Sem contas
+  locais/demo: crie em **Authentication → Users** e defina o papel em `profiles`.
+- `js/db.js` **camada de dados**: carrega as tabelas para um cache em memória e
+  grava por *diff* (INSERT de novas, UPDATE das alteradas, DELETE das removidas,
+  em lotes de 500). **Nada é gravado no navegador**; se o Supabase falhar, o app
+  avisa e não salva.
   - `demandas`: admin insere (importação); usuário faz UPDATE só na própria
     caixa/disponível (respeita o RLS).
   - `quarentena`/`reprovadas`/`importacoes`: só admin grava (RLS).
-- `js/app.js` — `loadDB/saveDB` agora falam com `window.SADDB`; após pegar,
-  liberar ou encerrar, quem usa banco compartilhado re-busca do servidor
-  (`refreshIfShared`) para ver a caixa atualizada.
-- O topo do app mostra **☁ Compartilhado** (Supabase ativo) ou **💾 Local**.
+- `js/app.js` — `loadDB/saveDB` falam com `window.SADDB`; após pegar, liberar ou
+  encerrar, re-busca do servidor (`refreshIfShared`) para ver a caixa atualizada.
+- O topo do app mostra **☁ Compartilhado** (Supabase ativo) ou ⚠/⚙ sem banco.
 
 ## 8. Checklist de aceite
 

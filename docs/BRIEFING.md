@@ -48,5 +48,5 @@ Igual ao `carregamentoepdpb`: header fixo + badge, toggle dark/light, botão gra
 
 ## 8. Estado técnico (MVP)
 - Estático, sem build: `index.html`, `login.html`, `css/`, `js/` + SheetJS CDN.
-- Banco local `localStorage sad_db_v1`; schema Supabase futuro em `docs/SUPABASE_SCHEMA.sql`.
-- Login demo local em `js/auth.js` (trocar pelo Supabase depois — ver `carregamentoepdpb/js/auth.js`).
+- Banco e login: **Supabase** (somente nuvem); schema em `docs/SUPABASE_SCHEMA.sql`.
+- Login via Supabase Auth (papéis em `profiles`); camada de dados em `js/db.js`.

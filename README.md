@@ -21,16 +21,18 @@ Resultado da comparação exata por NUMOS: **1.200 congruentes**, 17.806 só-SIA
 
 Campos SIATE que importam: `CODSERV`, `NUMOS`, `DATASOL`, `CODREG` (1=LESTE, 2=CENTRO, 3=OESTE), `OBSOS`, `NOMELCD` (cidade), `NOMECLI`, `NUMTEL`.
 
-## Como rodar (MVP local, sem build)
+## Como rodar
+
+Banco e login são **somente Supabase** (nuvem). Antes de rodar, siga `docs/DEPLOY_SUPABASE.md`:
+criar projeto, rodar o SQL e preencher `js/config.js`.
 
 ```bat
 cd D:\projetos\sistema-de-acompanhamento-de-demanda-recursos
 python -m http.server 8080
 ```
 
-Abrir `http://localhost:8080/login.html`:
-- admin → `admin@sistema` / `admin123` (importa, aprova quarentena)
-- equipe → `equipe@sistema` / `equipe123` (caixa principal)
+Abrir `http://localhost:8080/login.html` e entrar com uma conta criada em
+**Supabase → Authentication → Users** (o papel vem de `profiles.role`).
 
 Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cidade, período) → **Comparar bases** → **Jogar no banco** (incremental: soma sem apagar; preserva status/responsável; reprovada não volta; quarentena virada congruente é promovida) → gerenciar quarentena e caixa.
 
@@ -43,8 +45,8 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 - **Conflitos SIATE×LIST:** OS nas duas bases com **serviço diferente** não vai direto p/ caixa — abre **modal** de incongruências e vai para a aba **⚔️ Conflitos** da quarentena, com valores lado a lado e botões **P/ caixa (SIATE)** / **P/ caixa (LIST)** / Reprovar. Abas separadas: Conflitos, Só SIATE, Só LIST, Já na caixa.
 - **Distribuição automática (admin):** tela **🚚 Distribuição** — ativa/desativa, cota padrão igual p/ todos + cota individual por usuário (0 pula). Quem zera as abertas recebe sozinho (mais antigas primeiro): no login, na importação, ao encerrar a última e ao liberar. Admins não recebem.
 - **Ordenação da caixa:** select + clique no cabeçalho **NUM OS / DATA SOL** (mais antigas ↔ mais novas) — ideal p/ importação diária.
-- **Multiusuário:** admin cria contas em **Acompanhar usuários** (local `sad_users_v1`); banco compartilhado no site via **Supabase** — ver `docs/DEPLOY_SUPABASE.md` + `js/config.js` (enquanto vazio, roda local).
-- **Banco compartilhado (Supabase):** com `js/config.js` preenchido, login e dados usam a nuvem — todos veem a mesma caixa/quarentena. A camada `js/db.js` carrega em cache e grava por diff (INSERT/UPDATE/DELETE); sem Supabase, cai no `localStorage` sem regressão. O topo mostra **☁ Compartilhado** ou **💾 Local**.
+- **Multiusuário (Supabase):** login e dados **somente na nuvem** — todos veem a mesma caixa/quarentena. Contas e papéis são geridos no Dashboard (**Authentication → Users** e **Table Editor → profiles**). Sem logins demo e sem dados no navegador.
+- **Banco compartilhado (Supabase):** `js/db.js` carrega as tabelas em cache e grava por diff (INSERT/UPDATE/DELETE, em lotes). Se a nuvem não responder, o app avisa e **não** grava localmente. O topo mostra **☁ Compartilhado** (ou ⚠ Sem banco / ⚙ Não configurado).
 
 ## Estrutura
 
@@ -53,9 +55,9 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 ├── login.html          # login (Supabase Auth + demos locais)
 ├── css/style.css       # identidade (mesmas vars do carregamentoepdpb)
 ├── js/theme.js         # dark/light (key sad-theme)
-├── js/auth.js          # login híbrido: Supabase Auth ou local (sad_users_v1)
-├── js/db.js            # camada de dados: Supabase (compartilhado) ou localStorage
-├── js/config.js        # SUPABASE_URL + ANON_KEY (vazio = modo local)
+├── js/auth.js          # login Supabase (roles em profiles)
+├── js/db.js            # camada de dados: Supabase (somente nuvem)
+├── js/config.js        # SUPABASE_URL + ANON_KEY (obrigatório)
 ├── js/app.js           # parse SheetJS, sanitiza, compara NUMOS, caixa, quarentena
 ├── BASE/               # bases de exemplo (locais; fora do Git/deploy)
 ├── docs/BRIEFING.md
@@ -63,6 +65,5 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 └── data/               # (legado) usar BASE/
 ```
 
-Banco: **Supabase** quando `js/config.js` está preenchido (todos veem a mesma
-caixa); senão `localStorage sad_db_v1` (por navegador). Schema em
-`docs/SUPABASE_SCHEMA.sql` + passo a passo em `docs/DEPLOY_SUPABASE.md`.
+Banco e login: **Supabase** (somente nuvem) — todos veem a mesma caixa.
+Schema em `docs/SUPABASE_SCHEMA.sql` + passo a passo em `docs/DEPLOY_SUPABASE.md`.

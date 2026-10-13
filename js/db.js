@@ -1,4 +1,4 @@
-// ── Camada de dados: Supabase (nuvem, compartilhado) com fallback localStorage ──
+// ── Camada de dados: Supabase (somente nuvem) ──
 // Mantém em memória um cache no MESMO formato do banco local (sad_db_v1), para
 // que o app.js continue lendo de forma síncrona (loadDB) e gravando (saveDB).
 // Quando há Supabase + sessão: carrega/sincroniza tabelas demandas/quarentena/
@@ -6,26 +6,15 @@
 (function () {
   'use strict';
 
-  var DB_KEY = 'sad_db_v1';
   var PAGE = 1000; // Supabase devolve no máximo 1000 linhas por request
 
   var cache = null;              // { principal, quarentena, imports, reproved }
   var remoteReady = false;       // true = cache veio do Supabase e pode sincronizar
   var baseline = null;           // snapshot do último estado confirmado no servidor
   var chain = Promise.resolve(); // serializa as gravações
+  var errorHandler = null;       // callback p/ o app avisar falha de gravação
 
-  function localLoad() {
-    try {
-      var d = JSON.parse(localStorage.getItem(DB_KEY) || 'null');
-      if (d && d.principal && d.quarentena) return d;
-    } catch (e) {}
-    return { principal: [], quarentena: [], imports: [], reproved: [] };
-  }
-  function localSave(db) {
-    try { localStorage.setItem(DB_KEY, JSON.stringify(db)); return true; }
-    catch (e) { return false; }
-  }
-  function emptyDB() { return { principal: [], quarentena: [], imports: [], reproved: [] }; }
+  function emptyDB() { return { principal: [], quarentena: [], imports: [], reproved: [], cfg: null }; }
   function supabaseOn() {
     try { return typeof isSupabaseMode === 'function' && isSupabaseMode(); }
     catch (e) { return false; }
@@ -130,23 +119,23 @@
       var sess = await getSession();
       if (!sess) return false;
       var adm = typeof isAdminEmail === 'function' && isAdminEmail(sess.email);
+      var cfgRow = null;
       var jobs = [
         fetchAll('demandas', '*', 'numos'),
         fetchAll('reprovadas', 'numos,origem,por,created_at', 'numos'),
+        fetchAll('config', 'key,valor', null, function (q) { return q.eq('key', 'distrib'); }),
+        adm ? fetchAll('quarentena', 'numos,origem,motivo,dados,created_at', 'numos') : Promise.resolve([]),
+        adm ? fetchAll('importacoes', '*', null, function (q) { return q.order('id', { ascending: true }); }) : Promise.resolve([]),
       ];
-      // Quarentena e importações são só-admin (RLS); usuário recebe vazio.
-      if (adm) {
-        jobs.push(fetchAll('quarentena', 'numos,origem,motivo,dados,created_at', 'numos'));
-        jobs.push(fetchAll('importacoes', '*', null, function (q) { return q.order('id', { ascending: true }); }));
-      }
-      var results = await Promise.all(jobs);
-      var next = {
-        principal: (results[0] || []).map(demandFromRow),
-        quarentena: adm ? (results[2] || []).map(qFromRow) : [],
-        reproved: (results[1] || []).map(repFromRow),
-        imports: adm ? (results[3] || []).map(impFromRow) : [],
+      var rs = await Promise.all(jobs);
+      cfgRow = (rs[2] || [])[0];
+      cache = {
+        principal: (rs[0] || []).map(demandFromRow),
+        reproved: (rs[1] || []).map(repFromRow),
+        cfg: cfgRow ? (cfgRow.valor || null) : null,
+        quarentena: (rs[3] || []).map(qFromRow),
+        imports: (rs[4] || []).map(impFromRow),
       };
-      cache = next;
       baseline = JSON.stringify(cache);
       remoteReady = true;
       return true;
@@ -199,6 +188,9 @@
       if (!x._synced) { newI.push(impToRow(x)); pendingI.push(x); }
     });
 
+    // Configuração do app (ex.: distribuição): só grava se mudou.
+    var cfgChanged = JSON.stringify(prev.cfg || null) !== JSON.stringify(cache.cfg || null);
+
     var ops = [];
     var BATCH = 500; // evita payload gigante em importações (milhares de linhas)
     function chunk(arr, n) { var out = []; for (var i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; }
@@ -215,6 +207,7 @@
     });
     chunk(newR, BATCH).forEach(function (b) { ops.push(client.from('reprovadas').upsert(b, { onConflict: 'numos,origem' })); });
     chunk(newI, BATCH).forEach(function (b) { ops.push(client.from('importacoes').insert(b)); });
+    if (cfgChanged) ops.push(client.from('config').upsert({ key: 'distrib', valor: cache.cfg || {} }, { onConflict: 'key' }));
 
     if (!ops.length) { baseline = JSON.stringify(cache); return Promise.resolve(); }
     return Promise.all(ops).then(function (rs) {
@@ -228,25 +221,33 @@
   }
 
   function syncNow() {
-    chain = chain.then(function () { return doSync(); }).catch(function () { return { error: 'sync' }; });
+    chain = chain.then(function () { return doSync(); }).then(function (r) {
+      if (r && r.error && errorHandler) { try { errorHandler(r.error); } catch (e) {} }
+      return r;
+    }).catch(function (e) {
+      if (errorHandler) { try { errorHandler((e && e.message) || 'falha de sincronização'); } catch (e2) {} }
+      return { error: 'sync' };
+    });
     return chain;
   }
 
   window.SADDB = {
-    // loadDB/saveDB sincronos — usados pelo app.js
+    // loadDB/saveDB sincronos — usados pelo app.js. Tudo na nuvem: sem cache
+    // carregado, retorna vazio; sem nuvem, save falha (o app avisa).
     load: function () {
-      return cache || localLoad();
+      return cache || emptyDB();
     },
     save: function (db) {
+      if (!remoteReady) return false; // não grava localmente
       cache = db;
-      if (remoteReady) { try { syncNow(); } catch (e) {} return true; }
-      return localSave(db);
+      try { syncNow(); } catch (e) {}
+      return true;
     },
     // chamado no boot do app após requireAuth
     init: async function () {
-      if (!supabaseOn()) { cache = localLoad(); remoteReady = false; return 'local'; }
+      if (!supabaseOn()) { cache = emptyDB(); remoteReady = false; return 'unconfigured'; }
       var ok = await loadRemote();
-      if (!ok) { cache = cache || localLoad(); remoteReady = false; return 'local'; }
+      if (!ok) { cache = emptyDB(); remoteReady = false; return 'error'; }
       return 'supabase';
     },
     // re-busca do servidor (após ações que afetam outros usuários)
@@ -255,6 +256,17 @@
       try { return await loadRemote(); } catch (e) { return false; }
     },
     enabled: function () { return remoteReady; },
-    clearLocal: function () { try { localStorage.removeItem(DB_KEY); } catch (e) {} },
+    onError: function (fn) { errorHandler = fn; },
+    // configuração compartilhada (ex.: distribuição automática)
+    loadCfg: function () {
+      if (!cache) return null;
+      return cache.cfg || null;
+    },
+    saveCfg: function (cfg) {
+      if (!cache) cache = emptyDB();
+      cache.cfg = cfg;
+      if (remoteReady) { try { syncNow(); } catch (e) {} }
+      return remoteReady;
+    },
   };
 })();

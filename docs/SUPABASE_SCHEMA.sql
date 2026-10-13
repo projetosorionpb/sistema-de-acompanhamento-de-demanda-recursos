@@ -186,3 +186,23 @@ create policy "auth_update_own_profile" on profiles
 -- Promover a admin / criar contas: faça no Dashboard
 -- Authentication → Users → Add user, depois Table Editor → profiles → role='admin'.
 -- (Permitir update de role pelo app exigiria service_role; de propósito só leitura+self aqui.)
+
+-- ── 7. Configuração do app (compartilhada; ex.: distribuição automática) ──
+create table if not exists config (
+  key text primary key,
+  valor jsonb,
+  updated_at timestamptz default now()
+);
+alter table config enable row level security;
+
+-- Leitura para qualquer usuário logado (o app inteiro lê a config).
+drop policy if exists "read_config" on config;
+create policy "read_config" on config
+  for select to authenticated using (true);
+
+-- Escrita só admin.
+drop policy if exists "admin_write_config" on config;
+create policy "admin_write_config" on config
+  for all to authenticated
+  using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
+  with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
