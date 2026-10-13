@@ -497,7 +497,7 @@
     try {
       var dd = autoDistribute(db, null);
       if (dd.n > 0 && saveDB(db)) {
-        distMsg = ' • 🚚 distribuição automática: ' + distSummary(dd);
+        distMsg = ' • distribuição automática: ' + distSummary(dd);
         var dl = $('dist-log');
         if (dl) dl.textContent = new Date().toLocaleString('pt-BR') + ' — pós-importação: ' + distSummary(dd) + '.';
       }
@@ -577,9 +577,9 @@
   }
   function sortArrow(col) {
     var k = state.sort.key;
-    if (col === 'data' && (k === 'data-asc' || k === 'data-desc')) return k === 'data-asc' ? ' ▲' : ' ▼';
-    if (col === 'os' && (k === 'os-asc' || k === 'os-desc')) return k === 'os-asc' ? ' ▲' : ' ▼';
-    return ' <span style="opacity:.35">⇅</span>';
+    if (col === 'data' && (k === 'data-asc' || k === 'data-desc')) return ' <span class="sort-ico on">' + SADICON(k === 'data-asc' ? 'arrow-up' : 'arrow-down', 13) + '</span>';
+    if (col === 'os' && (k === 'os-asc' || k === 'os-desc')) return ' <span class="sort-ico on">' + SADICON(k === 'os-asc' ? 'arrow-up' : 'arrow-down', 13) + '</span>';
+    return ' <span class="sort-ico">' + SADICON('sort', 13) + '</span>';
   }
   function filteredQuar(db) {
     var q = state.search.trim().toUpperCase();
@@ -712,7 +712,10 @@
       mine++;
       if (p.encerradoEm && dayKey(p.encerradoEm) === tk) hoje++;
     });
-    el.innerHTML = '🙋 <b>' + mine + '</b> na minha caixa &nbsp;•&nbsp; ✅ <b>' + hoje + '</b> encerrada(s) hoje &nbsp;•&nbsp; 📦 <b>' + pool + '</b> disponível(is)';
+    el.innerHTML =
+      '<span class="mi">' + SADICON('user', 15) + '<b>' + mine + '</b> na minha caixa</span>' +
+      '<span class="mi">' + SADICON('check-circle', 15) + '<b>' + hoje + '</b> encerrada(s) hoje</span>' +
+      '<span class="mi">' + SADICON('package', 15) + '<b>' + pool + '</b> disponível(is)</span>';
     var nm = $('scope-n-mine'), np = $('scope-n-pool');
     if (nm) nm.textContent = mine;
     if (np) np.textContent = pool;
@@ -732,7 +735,7 @@
     var sliceP = lp.slice((state.pagePrincipal - 1) * PAGE_SIZE, state.pagePrincipal * PAGE_SIZE);
     var html = '';
     if (!sliceP.length) {
-      html = '<div class="no-results"><div class="big">📭</div>Nenhuma demanda na caixa principal.<br>Importe as bases acima (admin) para começar.</div>';
+      html = '<div class="no-results"><div class="big">' + SADICON('inbox', 38) + '</div>Nenhuma demanda na caixa principal.<br>Importe as bases acima (admin) para começar.</div>';
     } else {
       html = '<div class="table-wrap"><table><thead><tr>' +
         '<th data-sort="os" title="Clique para ordenar por NUM OS" style="cursor:pointer;user-select:none">NUM OS' + sortArrow('os') + '</th><th>CODSERV</th><th data-sort="data" title="Clique para ordenar por DATA SOL (antigas ↔ novas)" style="cursor:pointer;user-select:none">DATA SOL' + sortArrow('data') + '</th><th>REGIONAL</th><th>CIDADE</th><th>CLIENTE</th><th>TELEFONE</th><th>STATUS</th><th>RESPONSÁVEL</th><th>AÇÕES</th>' +
@@ -769,7 +772,7 @@
     var sliceQ = lq.slice((state.pageQuar - 1) * PAGE_SIZE, state.pageQuar * PAGE_SIZE);
     var hq = '';
     if (!sliceQ.length) {
-      hq = '<div class="no-results"><div class="big">🛡️</div>Quarentena vazia.<br>Divergências (só em uma base) aparecem aqui após a importação.</div>';
+      hq = '<div class="no-results"><div class="big">' + SADICON('shield', 38) + '</div>Quarentena vazia.<br>Divergências (só em uma base) aparecem aqui após a importação.</div>';
     } else {
       hq = '<div class="table-wrap"><table><thead><tr>' +
         '<th>NUM OS</th><th>ORIGEM</th><th>MOTIVO</th><th>DETALHE</th><th>AÇÕES (admin)</th>' +
@@ -791,7 +794,7 @@
         var motivo = qmotivo(x);
         var badge = x.origem === 'SO_SIATE' ? '<span class="badge badge-yellow">SÓ SIATE</span>'
           : x.origem === 'SO_LIST' ? '<span class="badge badge-red">SÓ LIST</span>'
-          : isDiv ? '<span class="badge badge-yellow">⚔️ CONFLITO</span>'
+          : isDiv ? '<span class="badge badge-yellow">' + SADICON('alert', 12) + ' CONFLITO</span>'
           : '<span class="badge badge-blue">JÁ NA CAIXA</span>';
         var acts;
         if (isDiv) {
@@ -956,11 +959,11 @@
       return groups[b].total - groups[a].total;
     });
     if (!order.length) {
-      el.innerHTML = '<div class="no-results"><div class="big">👥</div>Ninguém com OS ainda.<br>A caixa principal está vazia ou sem responsáveis.</div>';
+      el.innerHTML = '<div class="no-results"><div class="big">' + SADICON('users', 38) + '</div>Ninguém com OS ainda.<br>A caixa principal está vazia ou sem responsáveis.</div>';
       return;
     }
     var h = '<div class="table-wrap"><table><thead><tr>' +
-      '<th>Pessoa</th><th>Total</th><th>Hoje ✅</th><th>Em mãos</th><th>A iniciar</th><th>Em andamento</th><th>Pendente</th><th>Encerrado</th><th>OS (amostra)</th><th></th>' +
+      '<th>Pessoa</th><th>Total</th><th>Hoje</th><th>Em mãos</th><th>A iniciar</th><th>Em andamento</th><th>Pendente</th><th>Encerrado</th><th>OS (amostra)</th><th></th>' +
       '</tr></thead><tbody>';
     order.forEach(function (k) {
       var g = groups[k];
@@ -977,7 +980,7 @@
         '<td><button class="btn-small" data-act="ver-caixa" data-resp="' + esc(k) + '">Ver na caixa</button></td></tr>';
     });
     el.innerHTML = h + '</tbody></table></div>' +
-      '<div class="panel-hint">“Hoje ✅” = OS com status ENCERRADO registrado hoje para essa pessoa. Só aparecem pessoas com OS; contas sem OS não listam.</div>';
+      '<div class="panel-hint">“Hoje” = OS com status ENCERRADO registrado hoje para essa pessoa. Só aparecem pessoas com OS; contas sem OS não listam.</div>';
   }
 
   // ---------- métricas do admin (encerradas por usuário/período) ----------
@@ -1094,7 +1097,7 @@
     var hu = $('m-tbl-user');
     if (hu) {
       if (!rows.length) {
-        hu.innerHTML = '<div class="no-results"><div class="big">📈</div>Sem dados.<br>Cadastre usuários e importe OS para ver as métricas.</div>';
+        hu.innerHTML = '<div class="no-results"><div class="big">' + SADICON('chart', 38) + '</div>Sem dados.<br>Cadastre usuários e importe OS para ver as métricas.</div>';
       } else {
         var h = '<div class="table-wrap"><table><thead><tr>' +
           '<th>Usuário</th><th>Perfil</th><th>Encerradas (período)</th><th>Em mãos</th><th>Total na caixa</th>' +
@@ -1250,7 +1253,7 @@
       var db = loadDB(), users = [];
       try { if (typeof getUsers === 'function') users = getUsers(); } catch (e) {}
       if (!users.length) {
-        el.innerHTML = '<div class="no-results"><div class="big">🚚</div>Sem usuários cadastrados.</div>';
+        el.innerHTML = '<div class="no-results"><div class="big">' + SADICON('truck', 38) + '</div>Sem usuários cadastrados.</div>';
       } else {
         var h = '<div class="table-wrap"><table style="min-width:520px"><thead><tr>' +
           '<th>Usuário</th><th>Perfil</th><th>Abertas</th><th>Qtd individual</th>' +
@@ -1535,7 +1538,7 @@
       if (!qf.list.length) { alert('Nada nos filtros atuais.'); return; }
       if (!confirm('Aprovar ' + qf.list.length + ' item(ns) filtrado(s) → caixa principal?')) return;
       var ar = approveQuarList(qf.list);
-      renderAll('✅ ' + ar.added + ' OS aprovada(s) → caixa principal.' + (ar.skipped ? ' (' + ar.skipped + ' conflito(s) ignorados — revise um a um na aba Conflitos.)' : ''));
+      renderAll(ar.added + ' OS aprovada(s) → caixa principal.' + (ar.skipped ? ' (' + ar.skipped + ' conflito(s) ignorados — revise um a um na aba Conflitos.)' : ''));
     });
     var bqd = $('btn-q-apagar');
     if (bqd) bqd.addEventListener('click', function () {
@@ -1544,7 +1547,7 @@
       if (!qf.list.length) { alert('Nada nos filtros atuais.'); return; }
       if (!confirm('Apagar ' + qf.list.length + ' item(ns) FILTRADO(S) da quarentena? (Arquiva como reprovada p/ não voltar na próxima importação. A caixa NÃO é tocada.)')) return;
       var n = removeQuarList(qf.list, true);
-      renderAll('🗑️ ' + n + ' item(ns) apagado(s) da quarentena.');
+      renderAll(n + ' item(ns) apagado(s) da quarentena.');
     });
     var bql = $('btn-q-limpar');
     if (bql) bql.addEventListener('click', function () {
@@ -1554,7 +1557,7 @@
       if (!confirm('Apagar TUDO da quarentena (' + db0.quarentena.length + ' itens)? Arquiva como reprovadas p/ não voltarem. A caixa principal NÃO é tocada.')) return;
       if (!confirm('Confirma mesmo? Essa ação esvazia a quarentena.')) return;
       var n = removeQuarList(db0.quarentena, true);
-      renderAll('🧹 Quarentena esvaziada: ' + n + ' item(ns) apagado(s).');
+      renderAll('Quarentena esvaziada: ' + n + ' item(ns) apagado(s).');
     });
     // gestão de usuários (admin, local; Supabase vira definitivo)
     var bua = $('btn-user-add');
@@ -1567,7 +1570,7 @@
       if (r.error) { alert(r.error); return; }
       if ($('new-user-email')) $('new-user-email').value = '';
       if ($('new-user-pass')) $('new-user-pass').value = '';
-      renderAll('👤 Usuário ' + em + ' criado como ' + rl + '.');
+      renderAll('Usuário ' + em + ' criado como ' + rl + '.');
     });
 
     document.addEventListener('click', function (e) {
@@ -1589,8 +1592,8 @@
           p.responsavel = (state.user && state.user.email) || 'eu';
           if (p.statusDemanda === 'A INICIAR') p.statusDemanda = 'EM ANDAMENTO';
           p.encerradoEm = null; p.encerradoPor = null;
-          saveDB(db); renderAll('OS ' + os + ' na sua caixa. Bom trabalho! 🙋');
-          refreshIfShared('OS ' + os + ' na sua caixa. Bom trabalho! 🙋');
+          saveDB(db); renderAll('OS ' + os + ' na sua caixa.');
+          refreshIfShared('OS ' + os + ' na sua caixa.');
         }
       }
       if (act === 'liberar') {
@@ -1605,7 +1608,7 @@
           if (who) {
             try {
               var rl = autoDistribute(db, [who]);
-              if (rl.n > 0 && saveDB(db)) refill2 = ' 🚚 +' + rl.n + ' nova(s) na sua caixa.';
+              if (rl.n > 0 && saveDB(db)) refill2 = ' +' + rl.n + ' nova(s) na sua caixa.';
             } catch (e7) {}
           }
           renderAll('OS ' + os + ' devolvida aos disponíveis.' + refill2);
@@ -1700,7 +1703,7 @@
         if (credit) {
           try {
             var rd = autoDistribute(db, [credit]);
-            if (rd.n > 0 && saveDB(db)) refill = ' 🚚 +' + rd.n + ' nova(s) na sua caixa.';
+            if (rd.n > 0 && saveDB(db)) refill = ' +' + rd.n + ' nova(s) na sua caixa.';
           } catch (e6) {}
         }
         renderAll('OS ' + os + ' → ' + s.value + '.' + refill);
@@ -1767,7 +1770,7 @@
       if (!saveDB(db)) { alert('NÃO SALVOU: banco indisponível (Supabase).'); return; }
       var dl = $('dist-log');
       if (dl) dl.textContent = new Date().toLocaleString('pt-BR') + ' — manual: ' + distSummary(r) + '.';
-      renderAll('🚚 Distribuídas ' + r.n + ' OS: ' + distSummary(r) + '.');
+      renderAll('Distribuídas ' + r.n + ' OS: ' + distSummary(r) + '.');
       renderDistribuicao();
     });
     document.addEventListener('change', function (e) {
@@ -1896,13 +1899,13 @@
       state.result.fullSoList = full.soList.length;
     } catch (e2) { victims = []; }
     if (victims.length) {
-      lines.push('⚠ VÍTIMAS DO FILTRO (' + victims.length + ' de ' + state.result.fullCong + ' congruentes): estão nas DUAS bases cheias mas o filtro cortou ao menos um lado → iriam p/ quarentena injustamente:');
+      lines.push('ATENÇÃO — VÍTIMAS DO FILTRO (' + victims.length + ' de ' + state.result.fullCong + ' congruentes): estão nas DUAS bases cheias mas o filtro cortou ao menos um lado → iriam p/ quarentena injustamente:');
       victims.slice(0, 20).forEach(function (s) {
         lines.push('  • OS ' + s.numos + ' (' + (fS[s.numos] ? 'SIATE ok' : 'SIATE cortada') + ' | ' + (fL[s.numos] ? 'LIST ok' : 'LIST cortada') + ')');
       });
       if (victims.length > 20) lines.push('  … e mais ' + (victims.length - 20) + ' (alargue o filtro para ver todas).');
     } else {
-      lines.push('✓ Filtro limpo: nenhuma congruente das bases cheias ficou de fora.');
+      lines.push('OK: filtro limpo — nenhuma congruente das bases cheias ficou de fora.');
     }
     // Quarentena zerada suspeita: mesmo arquivo nos 2 campos ou universos idênticos.
     var warnSame = '';
@@ -1913,18 +1916,18 @@
       } else if (state.result && state.result.fullCong > 0 && state.result.fullSoSiate === 0 && state.result.fullSoList === 0 && !state.result.fullConfl) {
         warnSame = 'as duas bases têm EXATAMENTE as mesmas OS — confira se não subiu o mesmo arquivo (ou a mesma base filtrada) nos dois campos';
       }
-      if (warnSame) lines.push('⚠ QUARENTENA ZERADA SUSPEITA: ' + warnSame + '.');
+      if (warnSame) lines.push('ATENÇÃO — QUARENTENA ZERADA SUSPEITA: ' + warnSame + '.');
     } catch (e3) {}
     lines.push('Filtros: regional=' + (f.regs.join(',') || 'todas') + ' | codserv=' + (f.codserv || 'todos') + ' | cidade=' + (f.cidade || 'todas') + ' | período=' + (f.dIni || '…') + '→' + (f.dFim || '…'));
     $('log').textContent = lines.join('\n');
     $('alert').style.display = '';
     if (victims.length || warnSame) {
-      $('alert').innerHTML = (warnSame ? '⚠ <b>Quarentena zerada suspeita:</b> ' + esc(warnSame) + '.<br>' : '') +
-        (victims.length ? '⚠ <b>' + victims.length + '</b> OS estão nas <b>duas bases cheias</b> mas o filtro as jogaria na quarentena (veja “VÍTIMAS DO FILTRO” no log). Alargue o filtro ou prossiga ciente.<br>' : '') +
-        '✔ <b>' + cmp.cong.length + '</b> congruentes p/ caixa &nbsp;•&nbsp; ⚠ <b>' + (cmp.soSiate.length + cmp.soList.length) + '</b> divergentes p/ quarentena. Confira e clique em <b>“Jogar no banco”</b>.';
+      $('alert').innerHTML = (warnSame ? '<b>Quarentena zerada suspeita:</b> ' + esc(warnSame) + '.<br>' : '') +
+        (victims.length ? '<b>' + victims.length + '</b> OS estão nas <b>duas bases cheias</b> mas o filtro as jogaria na quarentena (veja “VÍTIMAS DO FILTRO” no log). Alargue o filtro ou prossiga ciente.<br>' : '') +
+        '<b>' + cmp.cong.length + '</b> congruentes p/ caixa &nbsp;•&nbsp; <b>' + (cmp.soSiate.length + cmp.soList.length) + '</b> divergentes p/ quarentena. Confira e clique em <b>“Jogar no banco”</b>.';
       $('alert').className = 'alert-box';
     } else {
-      $('alert').innerHTML = '✔ <b>' + cmp.cong.length + '</b> congruentes p/ caixa principal &nbsp;•&nbsp; ⚠ <b>' + (cmp.soSiate.length + cmp.soList.length) + '</b> divergentes p/ quarentena (tudo do universo filtrado). Filtro limpo, sem vítimas. <br>Confira e clique em <b>“Jogar no banco”</b>.';
+      $('alert').innerHTML = '<b>' + cmp.cong.length + '</b> congruentes p/ caixa principal &nbsp;•&nbsp; <b>' + (cmp.soSiate.length + cmp.soList.length) + '</b> divergentes p/ quarentena (tudo do universo filtrado). Filtro limpo, sem vítimas. <br>Confira e clique em <b>“Jogar no banco”</b>.';
       $('alert').className = 'alert-box green';
     }
     showResultModal(cmp, victims, warnSame);
@@ -1938,9 +1941,9 @@
     var title = $('modal-div-title');
     var confl = cmp.confl || [];
     var div = cmp.soSiate.length + cmp.soList.length;
-    if (title) title.textContent = confl.length ? '⚔️ Incongruências entre as bases' : '✔ Comparação pronta';
-    var h = '✔ <b>' + cmp.cong.length + '</b> congruentes → caixa &nbsp;•&nbsp; ⚠ <b>' + div + '</b> divergentes → quarentena';
-    if (confl.length) h += ' &nbsp;•&nbsp; ⚔️ <b>' + confl.length + '</b> conflitos';
+    if (title) title.textContent = confl.length ? 'Incongruências entre as bases' : 'Comparação pronta';
+    var h = '<b>' + cmp.cong.length + '</b> congruentes → caixa &nbsp;•&nbsp; <b>' + div + '</b> divergentes → quarentena';
+    if (confl.length) h += ' &nbsp;•&nbsp; <b>' + confl.length + '</b> conflitos';
     h += '<br><br>';
     if (confl.length) {
       h += 'OS nas <b>duas bases</b> mas com <b>serviço diferente</b> — revise antes de ir para a caixa:<br>';
@@ -1952,8 +1955,8 @@
     } else {
       h += 'Nenhum conflito de serviço neste universo filtrado. (Com filtro de serviço ativo, conflitos nem são possíveis — os dois lados já vêm com o mesmo serviço.)<br>';
     }
-    if (victims && victims.length) h += '<br>⚠ <b>' + victims.length + '</b> OS estão nas duas bases cheias mas o filtro as tiraria — veja “VÍTIMAS DO FILTRO” no log.<br>';
-    if (warnSame) h += '<br>⚠ <b>Quarentena zerada suspeita:</b> ' + esc(warnSame) + '.<br>';
+    if (victims && victims.length) h += '<br><b>' + victims.length + '</b> OS estão nas duas bases cheias mas o filtro as tiraria — veja “VÍTIMAS DO FILTRO” no log.<br>';
+    if (warnSame) h += '<br><b>Quarentena zerada suspeita:</b> ' + esc(warnSame) + '.<br>';
     h += '<br>Confira e clique em <b>“Jogar no banco”</b>.';
     body.innerHTML = h;
     var mbc = $('modal-btn-confl');
@@ -1993,14 +1996,16 @@
       var motivo = dbMode === 'unconfigured'
         ? 'Supabase não configurado (js/config.js).'
         : 'Não foi possível carregar o banco no Supabase (conexão, policies ou config).';
-      alert('⚠ ' + motivo + ' O sistema funciona somente com a nuvem — nada será gravado localmente.');
+      alert(motivo + ' O sistema funciona somente com a nuvem — nada será gravado localmente.');
     }
     try {
       var tb = document.querySelector('.topbar-right');
       if (tb) {
         var modeBadge = document.createElement('span');
         modeBadge.className = 'badge ' + (dbMode === 'supabase' ? 'badge-green' : (dbMode === 'error' ? 'badge-red' : 'badge-yellow'));
-        modeBadge.textContent = dbMode === 'supabase' ? '☁ Compartilhado' : (dbMode === 'error' ? '⚠ Sem banco' : '⚙ Não configurado');
+        modeBadge.innerHTML = dbMode === 'supabase'
+          ? SADICON('cloud', 13) + ' Compartilhado'
+          : (dbMode === 'error' ? SADICON('alert', 13) + ' Sem banco' : SADICON('settings', 13) + ' Não configurado');
         modeBadge.title = dbMode === 'supabase'
           ? 'Banco no Supabase: todos os usuários veem a mesma caixa.'
           : 'Sem banco disponível. Configure/conserte o Supabase (js/config.js).';
@@ -2029,7 +2034,7 @@
       try {
         var db0 = loadDB();
         var rd0 = autoDistribute(db0, [state.user.email]);
-        if (rd0.n > 0 && saveDB(db0)) welcome = ' 🚚 Você recebeu ' + rd0.n + ' OS na sua caixa.';
+        if (rd0.n > 0 && saveDB(db0)) welcome = 'Você recebeu ' + rd0.n + ' OS na sua caixa.';
       } catch (e8) {}
     }
     renderAll(welcome || undefined);

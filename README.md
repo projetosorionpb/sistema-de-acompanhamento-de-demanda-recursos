@@ -8,7 +8,7 @@ Conciliação **SIATE × LIST** pela chave **NUMOS exata**:
 - **Congruentes** (nas 2 bases) → **caixa principal**, usuários pegam e trabalham (status: `A INICIAR`, `EM ANDAMENTO`, `PENDENTE`, `ENCERRADO`)
 - **Divergentes** (só em uma) → **quarentena**, admin **aprova** (→ caixa) ou **reprova**
 
-Identidade visual igual ao `carregamentoepdpb` (dark/light, laranja `#f0a500`, DM Sans + Space Mono).
+Identidade visual: SaaS empresarial (dark/light, laranja `#f0a500`, Inter + Space Mono), ícones **SVG** (sem emojis).
 
 ## Bases reais (commit `59ec9e7`)
 
@@ -53,8 +53,9 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 ```
 ├── index.html          # app (upload, filtros, resumo, caixa, quarentena)
 ├── login.html          # login (Supabase Auth + demos locais)
-├── css/style.css       # identidade (mesmas vars do carregamentoepdpb)
+├── css/style.css       # UI SaaS empresarial (dark/light, sem emojis)
 ├── js/theme.js         # dark/light (key sad-theme)
+├── js/icons.js         # ícones SVG (SADICON) — substituem emojis
 ├── js/auth.js          # login Supabase (roles em profiles)
 ├── js/db.js            # camada de dados: Supabase (somente nuvem)
 ├── js/config.js        # SUPABASE_URL + ANON_KEY (obrigatório)
