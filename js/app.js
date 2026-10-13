@@ -1371,6 +1371,13 @@
     function chip(val, label, n) {
       return '<span class="chip' + (filter === val ? ' active' : '') + '" data-uf="' + val + '">' + esc(label) + ' <b>' + n + '</b></span>';
     }
+    function reload() {
+      db = loadDB();
+      list = db.principal.filter(function (p) { return String(p.responsavel || '').toLowerCase() === em; });
+      map = { 'A INICIAR': 0, 'EM ANDAMENTO': 0, 'OCORRENCIA': 0, 'ENCERRADO': 0 };
+      list.forEach(function (p) { if (map[p.statusDemanda] !== undefined) map[p.statusDemanda]++; });
+      if (title) title.textContent = 'OS de ' + (user ? user.email : (email || '—')) + ' — ' + list.length + ' no total';
+    }
     function render() {
       var rows = list.filter(function (p) { return filter === 'TODOS' || p.statusDemanda === filter; });
       var html = '<div class="status-filter" style="margin-bottom:14px">' +
@@ -1388,14 +1395,19 @@
           (state.isAdmin ? '<th>AÇÕES</th>' : '') +
           '</tr></thead><tbody>';
         rows.forEach(function (p) {
+          var acts = state.isAdmin
+            ? '<td style="white-space:nowrap">' +
+              '<button class="btn-small" data-uoco="' + esc(p.numos) + '">Ocorrência</button> ' +
+              '<button class="btn-small ok" data-uenc="' + esc(p.numos) + '">Encerrar</button> ' +
+              '<button class="btn-small danger" data-ulos="' + esc(p.numos) + '">Retirar</button></td>'
+            : '';
           html += '<tr><td><span class="os-id">' + esc(p.numos) + '</span></td>' +
             '<td class="mono">' + esc(p.codserv || '—') + '</td>' +
             '<td>' + esc(p.cidade || '—') + '</td>' +
             '<td class="mono">' + esc(p.dataISO || p.datasol || '—') + '</td>' +
             '<td>' + statusBadge(p.statusDemanda) + '</td>' +
-            '<td style="font-size:12px;max-width:280px">' + esc(p.motivoOcorrencia || '—') + '</td>' +
-            (state.isAdmin ? '<td style="white-space:nowrap"><button class="btn-small danger" data-ulos="' + esc(p.numos) + '">Retirar</button></td>' : '') +
-            '</tr>';
+            '<td style="font-size:12px;max-width:240px">' + esc(p.motivoOcorrencia || '—') + '</td>' +
+            acts + '</tr>';
         });
         html += '</tbody></table></div><div class="panel-hint">' + rows.length + ' OS listada(s).</div>';
       }
@@ -1403,6 +1415,7 @@
       body.querySelectorAll('[data-uf]').forEach(function (c) {
         c.addEventListener('click', function () { filter = c.getAttribute('data-uf'); render(); });
       });
+      // Retirar (volta para os disponíveis)
       body.querySelectorAll('[data-ulos]').forEach(function (c) {
         c.addEventListener('click', function () {
           var numos = c.getAttribute('data-ulos');
@@ -1414,13 +1427,44 @@
             px.encerradoEm = null; px.encerradoPor = null; px.motivoOcorrencia = '';
             saveDB(d);
           }
-          // recarrega o modal com os dados atualizados
-          db = loadDB();
-          list = db.principal.filter(function (p) { return String(p.responsavel || '').toLowerCase() === em; });
-          map = { 'A INICIAR': 0, 'EM ANDAMENTO': 0, 'OCORRENCIA': 0, 'ENCERRADO': 0 };
-          list.forEach(function (p) { if (map[p.statusDemanda] !== undefined) map[p.statusDemanda]++; });
-          render();
+          reload(); render();
           renderAll('OS ' + numos + ' retirada de ' + (email || '') + '.');
+        });
+      });
+      // Encerrar (admin encerra a OS de alguém)
+      body.querySelectorAll('[data-uenc]').forEach(function (c) {
+        c.addEventListener('click', function () {
+          var numos = c.getAttribute('data-uenc');
+          if (!confirm('Encerrar a OS ' + numos + ' de ' + (email || '') + '?')) return;
+          var d = loadDB();
+          var px = d.principal.find(function (x) { return x.numos === numos; });
+          if (!px) return;
+          px.statusDemanda = 'ENCERRADO';
+          px.encerradoEm = new Date().toISOString();
+          px.encerradoPor = px.responsavel || (state.user && state.user.email) || '';
+          px.motivoOcorrencia = '';
+          saveDB(d);
+          try { var rd = autoDistribute(d, [px.encerradoPor]); if (rd.n > 0) saveDB(d); } catch (e) {}
+          reload(); render();
+          renderAll('OS ' + numos + ' encerrada.');
+        });
+      });
+      // Mandar para ocorrência (pede o motivo)
+      body.querySelectorAll('[data-uoco]').forEach(function (c) {
+        c.addEventListener('click', function () {
+          var numos = c.getAttribute('data-uoco');
+          openOcorrenciaModal(numos, '', function (motivo) {
+            var d = loadDB();
+            var px = d.principal.find(function (x) { return x.numos === numos; });
+            if (px) {
+              px.statusDemanda = 'OCORRENCIA';
+              px.motivoOcorrencia = motivo;
+              px.encerradoEm = null; px.encerradoPor = null;
+              saveDB(d);
+            }
+            reload(); render();
+            renderAll('OS ' + numos + ' → OCORRÊNCIA.');
+          });
         });
       });
     }
