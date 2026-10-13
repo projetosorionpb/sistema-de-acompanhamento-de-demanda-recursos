@@ -149,7 +149,9 @@
   function refreshIfShared(msg) {
     try {
       if (window.SADDB && SADDB.enabled()) {
-        SADDB.refresh().then(function () { renderAll(msg); });
+        SADDB.refresh().then(function (ok) {
+          renderAll(ok ? msg : 'Alteração não confirmada no Supabase; exibindo o estado atual do servidor.');
+        });
       }
     } catch (e) {}
   }
@@ -383,7 +385,9 @@
       if (f.codserv && String(r.codserv || '') !== String(f.codserv)) return false;
       if (f.cidade && rowCid(r).indexOf(f.cidade) === -1) return false;
       var iso = rowISO(r);
-      if ((f.dIni || f.dFim) && iso) {
+      if (f.dIni || f.dFim) {
+        // Com filtro de data ativo, registros sem uma data válida não passam.
+        if (!iso) return false;
         if (f.dIni && iso < f.dIni) return false;
         if (f.dFim && iso > f.dFim) return false;
       }
@@ -392,7 +396,28 @@
   }
   function filteredUniverse() {
     var f = currentFilters();
-    return { f: f, siate: applyFilters(state.siateClean, f), list: applyFilters(state.listClean, f) };
+    // Primeiro filtra cada base. O conjunto de NUMOS elegíveis é a união das
+    // duas bases: se uma OS passar o filtro em um lado, incluímos o par do
+    // outro lado (mesmo que o CODSERV/data difira) para detectar conflitos.
+    // Se não passar em nenhuma base, fica fora de comparação/quarentena/banco.
+    var eligibleSiate = applyFilters(state.siateClean, f);
+    var eligibleList = applyFilters(state.listClean, f);
+    var selected = {}, eligibleS = {}, eligibleL = {};
+    eligibleSiate.forEach(function (r) { selected[r.numos] = 1; eligibleS[r.numos] = 1; });
+    eligibleList.forEach(function (r) { selected[r.numos] = 1; eligibleL[r.numos] = 1; });
+    var siate = state.siateClean.filter(function (r) { return !!selected[r.numos]; });
+    var list = state.listClean.filter(function (r) { return !!selected[r.numos]; });
+    return {
+      f: f,
+      siate: siate,
+      list: list,
+      eligibleSiate: eligibleSiate,
+      eligibleList: eligibleList,
+      pairedSiate: siate.filter(function (r) { return !eligibleS[r.numos]; }).length,
+      pairedList: list.filter(function (r) { return !eligibleL[r.numos]; }).length,
+      excludedSiate: state.siateClean.filter(function (r) { return !selected[r.numos]; }).length,
+      excludedList: state.listClean.filter(function (r) { return !selected[r.numos]; }).length,
+    };
   }
 
   // ---------- jogar no banco (INCREMENTAL: soma, nunca apaga) ----------
@@ -407,6 +432,8 @@
     var sp0 = splitConflicts(cmp.cong, u.list);
     cmp.cong = sp0.pure;
     cmp.confl = sp0.confl;
+    cmp.filteredSiate = u.siate.length;
+    cmp.filteredList = u.list.length;
     state.result = cmp;
     var f = u.f;
     var db = loadDB();
@@ -805,9 +832,10 @@
   function renderStats() {
     var db = loadDB();
     var r = state.result;
-    $('st-si').textContent = state.siateClean.length || (r ? r.cong.length + r.soSiate.length : db.principal.length ? '—' : '0');
-    $('st-li').textContent = state.listClean.length || (r ? r.cong.length + r.soList.length : '0');
+    $('st-si').textContent = r && r.filteredSiate !== undefined ? r.filteredSiate : (state.siateClean.length || (r ? r.cong.length + r.soSiate.length : db.principal.length ? '—' : '0'));
+    $('st-li').textContent = r && r.filteredList !== undefined ? r.filteredList : (state.listClean.length || (r ? r.cong.length + r.soList.length : '0'));
     $('st-ok').textContent = r ? r.cong.length : db.principal.length;
+    if ($('st-conf')) $('st-conf').textContent = r ? (r.confl || []).length : db.quarentena.filter(function (x) { return x.origem === 'DIVERGENTE'; }).length;
     $('st-ssi').textContent = r ? r.soSiate.length : db.quarentena.filter(function (x) { return x.origem === 'SO_SIATE'; }).length;
     $('st-sli').textContent = r ? r.soList.length : db.quarentena.filter(function (x) { return x.origem === 'SO_LIST'; }).length;
     $('st-p').textContent = db.principal.length;
@@ -1428,7 +1456,9 @@
             saveDB(d);
           }
           reload(); render();
-          renderAll('OS ' + numos + ' retirada de ' + (email || '') + '.');
+          var msg = 'OS ' + numos + ' retirada de ' + (email || '') + '.';
+          renderAll(msg);
+          refreshIfShared(msg);
         });
       });
       // Encerrar (admin encerra a OS de alguém)
@@ -1446,7 +1476,9 @@
           saveDB(d);
           try { var rd = autoDistribute(d, [px.encerradoPor]); if (rd.n > 0) saveDB(d); } catch (e) {}
           reload(); render();
-          renderAll('OS ' + numos + ' encerrada.');
+          var msg = 'OS ' + numos + ' encerrada.';
+          renderAll(msg);
+          refreshIfShared(msg);
         });
       });
       // Mandar para ocorrência (pede o motivo)
@@ -1463,7 +1495,9 @@
               saveDB(d);
             }
             reload(); render();
-            renderAll('OS ' + numos + ' → OCORRÊNCIA.');
+            var msg = 'OS ' + numos + ' → OCORRÊNCIA.';
+            renderAll(msg);
+            refreshIfShared(msg);
           });
         });
       });
@@ -2013,7 +2047,7 @@
           p.responsavel = (state.user && state.user.email) || 'eu';
           if (p.statusDemanda === 'A INICIAR') p.statusDemanda = 'EM ANDAMENTO';
           p.encerradoEm = null; p.encerradoPor = null;
-          saveDB(db); renderAll('OS ' + os + ' na sua caixa.');
+          saveDB(db); renderAll('Salvando OS ' + os + '…');
           refreshIfShared('OS ' + os + ' na sua caixa.');
         }
       }
@@ -2147,12 +2181,26 @@
       aplicar();
     });
 
-    document.querySelectorAll('.check-pill').forEach(function (pill) {
-      pill.addEventListener('click', function () {
-        var inp = pill.querySelector('input');
-        inp.checked = !inp.checked;
-        pill.classList.toggle('on', inp.checked);
-      });
+    // Delegado porque as opções de Auto individual são criadas ao abrir a tela.
+    document.addEventListener('click', function (e) {
+      var pill = e.target.closest ? e.target.closest('.check-pill') : null;
+      if (!pill) return;
+      if (e && e.preventDefault) e.preventDefault();
+      var inp = pill.querySelector('input');
+      if (!inp) return;
+      inp.checked = !inp.checked;
+      pill.classList.toggle('on', inp.checked);
+      if (inp.getAttribute('data-dist-auto') !== null) {
+        if (!state.isAdmin) return;
+        var emailAuto = String(inp.getAttribute('data-dist-auto') || '').toLowerCase();
+        var cfgAuto = loadCfg();
+        cfgAuto.distrib = cfgAuto.distrib || { enabled: false, qty: 10, per: {}, autoOff: {} };
+        cfgAuto.distrib.autoOff = cfgAuto.distrib.autoOff || {};
+        if (inp.checked) delete cfgAuto.distrib.autoOff[emailAuto];
+        else cfgAuto.distrib.autoOff[emailAuto] = true;
+        saveCfg(cfgAuto);
+        renderDistribuicao();
+      }
     });
 
     var fSi = $('file-si'), fLi = $('file-li');
@@ -2223,17 +2271,6 @@
         saveCfg(cfg);
         renderDistribuicao();
       }
-      if (t && t.getAttribute && t.getAttribute('data-dist-auto') !== null) {
-        if (!state.isAdmin) return;
-        var emA = String(t.getAttribute('data-dist-auto') || '').toLowerCase();
-        var cfgA = loadCfg();
-        cfgA.distrib = cfgA.distrib || { enabled: false, qty: 10, per: {}, autoOff: {} };
-        cfgA.distrib.autoOff = cfgA.distrib.autoOff || {};
-        if (t.checked) delete cfgA.distrib.autoOff[emA];
-        else cfgA.distrib.autoOff[emA] = true;
-        saveCfg(cfgA);
-        renderDistribuicao();
-      }
     });
     var bc = $('btn-clear');
     if (bc) bc.addEventListener('click', function () {
@@ -2301,6 +2338,7 @@
   function buildCodservOptions() {
     var set = {};
     state.siateClean.forEach(function (s) { if (s.codserv) set[s.codserv] = 1; });
+    state.listClean.forEach(function (l) { if (l.codserv) set[l.codserv] = 1; });
     state.codservOptions = Object.keys(set).sort(function (a, b) { return Number(a) - Number(b); });
     var sel = $('f-codserv');
     if (!sel) return;
@@ -2321,11 +2359,20 @@
     var spp = splitConflicts(cmp.cong, u.list);
     cmp.cong = spp.pure;
     cmp.confl = spp.confl;
+    cmp.filteredSiate = u.siate.length;
+    cmp.filteredList = u.list.length;
     state.result = cmp;
     var f = u.f;
     var lines = [];
-    lines.push('FILTROS RECORTARAM AS DUAS BASES (resto descartado):');
-    lines.push('- SIATE: ' + u.siate.length + ' de ' + state.siateClean.length + ' | LIST: ' + u.list.length + ' de ' + state.listClean.length);
+    lines.push('FILTROS APLICADOS A CADA PLANILHA; comparação pela união dos NUMOS elegíveis:');
+    lines.push('- SIATE que passou nos filtros: ' + u.eligibleSiate.length + ' de ' + state.siateClean.length +
+      ' (' + u.excludedSiate + ' excluídas) | LIST: ' + u.eligibleList.length + ' de ' + state.listClean.length +
+      ' (' + u.excludedList + ' excluídas)');
+    if (u.pairedSiate || u.pairedList) {
+      lines.push('- Pares incluídos para detectar divergência: ' + u.pairedSiate + ' registro(s) SIATE + ' + u.pairedList +
+        ' LIST que não passaram individualmente, mas têm NUMOS presente na outra base elegível.');
+    }
+    lines.push('- Universo comparado: ' + u.siate.length + ' NUMOS na SIATE | ' + u.list.length + ' na LIST. OS sem correspondência que não passaram em nenhum lado ficam totalmente fora.');
     lines.push('COMPARAÇÃO POR NUMOS (exato) no universo filtrado:');
     lines.push('- Congruentes: ' + cmp.cong.length + ' → caixa principal');
     lines.push('- Conflitos de dados: ' + (cmp.confl || []).length + ' → quarentena DIVERGENTE (revisar lado a lado)');
@@ -2342,19 +2389,18 @@
     // universo comparado (iriam p/ quarentena injustamente como SÓ SIATE/SÓ LIST).
     var victims = [];
     try {
-      var congF = {};
-      cmp.cong.forEach(function (s) { congF[s.numos] = 1; });
-      (cmp.confl || []).forEach(function (c) { congF[c.s.numos] = 1; });
+      var selectedNums = {};
+      u.siate.forEach(function (s) { selectedNums[s.numos] = 1; });
+      u.list.forEach(function (l) { selectedNums[l.numos] = 1; });
       var fS = {}, fL = {};
-      u.siate.forEach(function (s) { fS[s.numos] = 1; });
-      u.list.forEach(function (l) { fL[l.numos] = 1; });
+      u.eligibleSiate.forEach(function (s) { fS[s.numos] = 1; });
+      u.eligibleList.forEach(function (l) { fL[l.numos] = 1; });
       var full = compare(state.siateClean, state.listClean);
       var fullSp = splitConflicts(full.cong, state.listClean);
-      var fullNums = {};
-      full.cong.forEach(function (s) { fullNums[s.numos] = 1; });
-      fullSp.confl.forEach(function (c) { fullNums[c.s.numos] = 1; });
-      victims = full.cong.filter(function (s) { return !congF[s.numos]; });
-      fullSp.confl.forEach(function (c) { if (!congF[c.s.numos]) victims.push(c.s); });
+      // OS pareadas nas bases completas que não passaram em nenhum lado: não
+      // entram nem na comparação filtrada nem na quarentena.
+      victims = full.cong.filter(function (s) { return !selectedNums[s.numos]; });
+      fullSp.confl.forEach(function (c) { if (!selectedNums[c.s.numos]) victims.push(c.s); });
       state.result.victims = victims;
       state.result.fullCong = full.cong.length + fullSp.confl.length;
       state.result.fullConfl = fullSp.confl.length;
@@ -2362,13 +2408,13 @@
       state.result.fullSoList = full.soList.length;
     } catch (e2) { victims = []; }
     if (victims.length) {
-      lines.push('ATENÇÃO — VÍTIMAS DO FILTRO (' + victims.length + ' de ' + state.result.fullCong + ' congruentes): estão nas DUAS bases cheias mas o filtro cortou ao menos um lado → iriam p/ quarentena injustamente:');
+      lines.push('FORA DO UNIVERSO FILTRADO (' + victims.length + ' OS): existem nas duas bases, mas nenhum dos lados passou todos os filtros. Não serão comparadas, enviadas à quarentena nem gravadas:');
       victims.slice(0, 20).forEach(function (s) {
         lines.push('  • OS ' + s.numos + ' (' + (fS[s.numos] ? 'SIATE ok' : 'SIATE cortada') + ' | ' + (fL[s.numos] ? 'LIST ok' : 'LIST cortada') + ')');
       });
       if (victims.length > 20) lines.push('  … e mais ' + (victims.length - 20) + ' (alargue o filtro para ver todas).');
     } else {
-      lines.push('OK: filtro limpo — nenhuma congruente das bases cheias ficou de fora.');
+      lines.push('OK: não há OS pareadas fora do universo filtrado.');
     }
     // Quarentena zerada suspeita: mesmo arquivo nos 2 campos ou universos idênticos.
     var warnSame = '';
@@ -2386,7 +2432,7 @@
     $('alert').style.display = '';
     if (victims.length || warnSame) {
       $('alert').innerHTML = (warnSame ? '<b>Quarentena zerada suspeita:</b> ' + esc(warnSame) + '.<br>' : '') +
-        (victims.length ? '<b>' + victims.length + '</b> OS estão nas <b>duas bases cheias</b> mas o filtro as jogaria na quarentena (veja “VÍTIMAS DO FILTRO” no log). Alargue o filtro ou prossiga ciente.<br>' : '') +
+        (victims.length ? '<b>' + victims.length + '</b> OS estão nas duas bases, mas não passaram nos filtros em nenhum lado; foram excluídas e não irão para a quarentena nem para o banco.<br>' : '') +
         '<b>' + cmp.cong.length + '</b> congruentes p/ caixa &nbsp;•&nbsp; <b>' + (cmp.soSiate.length + cmp.soList.length) + '</b> divergentes p/ quarentena. Confira e clique em <b>“Jogar no banco”</b>.';
       $('alert').className = 'alert-box';
     } else {
@@ -2407,7 +2453,7 @@
     if (title) title.textContent = confl.length ? 'Incongruências entre as bases' : 'Comparação pronta';
     var h = '<b>' + cmp.cong.length + '</b> congruentes → caixa &nbsp;•&nbsp; <b>' + div + '</b> divergentes → quarentena';
     if (confl.length) h += ' &nbsp;•&nbsp; <b>' + confl.length + '</b> conflitos';
-    h += '<br><br>';
+    h += '<br><br>Uma OS entra no universo quando pelo menos uma das bases passa em todos os filtros. O registro com o mesmo NUM OS na outra base também é comparado, mesmo que tenha serviço/data diferente, para revelar divergências.<br><br>';
     if (confl.length) {
       h += 'OS nas <b>duas bases</b> mas com <b>serviço diferente</b> — revise antes de ir para a caixa:<br>';
       confl.slice(0, 8).forEach(function (c) {
@@ -2416,9 +2462,9 @@
       if (confl.length > 8) h += '<div class="modal-row">… e mais ' + (confl.length - 8) + '</div>';
       h += '<br>Vão para a aba <b>Conflitos</b> da quarentena (libera SIATE ou LIST, ou reprova). As que só existem em uma base vão para <b>Só SIATE / Só LIST</b>.<br>';
     } else {
-      h += 'Nenhum conflito de serviço neste universo filtrado. (Com filtro de serviço ativo, conflitos nem são possíveis — os dois lados já vêm com o mesmo serviço.)<br>';
+      h += 'Nenhum conflito de serviço neste universo filtrado. Quando uma OS passa no filtro em uma base, o registro correspondente da outra base também é incluído para detectar diferenças de serviço.<br>';
     }
-    if (victims && victims.length) h += '<br><b>' + victims.length + '</b> OS estão nas duas bases cheias mas o filtro as tiraria — veja “VÍTIMAS DO FILTRO” no log.<br>';
+    if (victims && victims.length) h += '<br><b>' + victims.length + '</b> OS estão nas duas bases, mas nenhum lado passou nos filtros; foram excluídas e não irão para a quarentena nem para o banco.<br>';
     if (warnSame) h += '<br><b>Quarentena zerada suspeita:</b> ' + esc(warnSame) + '.<br>';
     h += '<br>Confira e clique em <b>“Jogar no banco”</b>.';
     body.innerHTML = h;

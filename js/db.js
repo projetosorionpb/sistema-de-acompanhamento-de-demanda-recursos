@@ -151,13 +151,18 @@
     if (!remoteReady || !cache || !baseline) return Promise.resolve();
     var prev;
     try { prev = JSON.parse(baseline); } catch (e) { prev = emptyDB(); }
+    // Congela o estado deste write. Se outra ação mudar o cache enquanto o
+    // request está em trânsito, a próxima operação calcula seu diff contra
+    // este snapshot confirmado, sem perder a alteração mais nova.
+    var target;
+    try { target = JSON.parse(JSON.stringify(cache)); } catch (e0) { target = emptyDB(); }
     var client = supa();
 
     var prevP = {}, nextP = {};
     (prev.principal || []).forEach(function (p) { prevP[String(p.numos)] = p; });
-    (cache.principal || []).forEach(function (p) { nextP[String(p.numos)] = p; });
+    (target.principal || []).forEach(function (p) { nextP[String(p.numos)] = p; });
     var insP = [], updP = [];
-    (cache.principal || []).forEach(function (p) {
+    (target.principal || []).forEach(function (p) {
       var pk = String(p.numos);
       if (!prevP[pk]) insP.push(demandToRow(p));
       else if (JSON.stringify(prevP[pk]) !== JSON.stringify(p)) updP.push(demandToRow(p));
@@ -169,9 +174,9 @@
 
     var prevQ = {}, nextQ = {};
     (prev.quarentena || []).forEach(function (x) { prevQ[keyOf(x)] = x; });
-    (cache.quarentena || []).forEach(function (x) { nextQ[keyOf(x)] = x; });
+    (target.quarentena || []).forEach(function (x) { nextQ[keyOf(x)] = x; });
     var newQ = [];
-    (cache.quarentena || []).forEach(function (x) {
+    (target.quarentena || []).forEach(function (x) {
       var k = keyOf(x);
       if (!prevQ[k] || JSON.stringify(prevQ[k]) !== JSON.stringify(x)) newQ.push(qToRow(x));
     });
@@ -180,22 +185,22 @@
 
     var prevR = {}, nextR = {};
     (prev.reproved || []).forEach(function (x) { prevR[keyOf(x)] = x; });
-    (cache.reproved || []).forEach(function (x) { nextR[keyOf(x)] = x; });
+    (target.reproved || []).forEach(function (x) { nextR[keyOf(x)] = x; });
     var newR = [];
-    (cache.reproved || []).forEach(function (x) { if (!prevR[keyOf(x)]) newR.push(repToRow(x)); });
+    (target.reproved || []).forEach(function (x) { if (!prevR[keyOf(x)]) newR.push(repToRow(x)); });
     var delR = [];
     (prev.reproved || []).forEach(function (x) { if (!nextR[keyOf(x)]) delR.push(x); });
 
     // Importações: insere as ainda não sincronizadas (flag _synced), nunca duplica.
     var newI = [], pendingI = [];
-    (cache.imports || []).forEach(function (x) {
-      if (!x._synced) { newI.push(impToRow(x)); pendingI.push(x); }
+    (target.imports || []).forEach(function (x, index) {
+      if (!x._synced) { newI.push(impToRow(x)); pendingI.push({ index: index, ts: x.ts }); }
     });
     // Importações removidas (limpar banco) → apaga o histórico no servidor.
-    var delI = (prev.imports || []).length > 0 && !(cache.imports || []).length;
+    var delI = (prev.imports || []).length > 0 && !(target.imports || []).length;
 
     // Configuração do app (ex.: distribuição): só grava se mudou.
-    var cfgChanged = JSON.stringify(prev.cfg || null) !== JSON.stringify(cache.cfg || null);
+    var cfgChanged = JSON.stringify(prev.cfg || null) !== JSON.stringify(target.cfg || null);
 
     var ops = [];
     var BATCH = 500; // evita payload gigante em importações (milhares de linhas)
@@ -204,39 +209,52 @@
     // Updates em linhas existentes: UPDATE (não upsert) — funciona para o
     // usuário comum, que só tem policy de UPDATE na própria caixa.
     updP.forEach(function (row) {
-      ops.push(client.from('demandas').update(row).eq('numos', row.numos));
+      // Retorna numos para saber se o RLS permitiu a alteração. Em disputa
+      // para pegar a mesma OS, só a primeira atualização deve vencer.
+      var updateOp = client.from('demandas').update(row).eq('numos', row.numos).select('numos');
+      ops.push(Promise.resolve(updateOp).then(function (r) {
+        if (r && r.error) return r;
+        if (r && Array.isArray(r.data) && !r.data.length) {
+          return { error: 'A OS ' + row.numos + ' não foi atualizada: pode ter sido assumida por outro usuário. Atualize a tela.' };
+        }
+        return r;
+      }));
     });
     // Apagar em massa (quando a lista final fica vazia) é mais robusto que
     // apagar item a item — usado pelo "Limpar banco".
     if (delP.length) {
-      if (!(cache.principal || []).length) ops.push(client.from('demandas').delete().neq('numos', ''));
+      if (!(target.principal || []).length) ops.push(client.from('demandas').delete().neq('numos', ''));
       else chunk(delP, BATCH).forEach(function (b) { ops.push(client.from('demandas').delete().in('numos', b)); });
     }
     chunk(newQ, BATCH).forEach(function (b) { ops.push(client.from('quarentena').upsert(b, { onConflict: 'numos,origem' })); });
     if (delQ.length) {
-      if (!(cache.quarentena || []).length) ops.push(client.from('quarentena').delete().neq('numos', ''));
+      if (!(target.quarentena || []).length) ops.push(client.from('quarentena').delete().neq('numos', ''));
       else delQ.forEach(function (x) {
         ops.push(client.from('quarentena').delete().eq('numos', x.numos).eq('origem', x.origem));
       });
     }
     chunk(newR, BATCH).forEach(function (b) { ops.push(client.from('reprovadas').upsert(b, { onConflict: 'numos,origem' })); });
     if (delR.length) {
-      if (!(cache.reproved || []).length) ops.push(client.from('reprovadas').delete().neq('numos', ''));
+      if (!(target.reproved || []).length) ops.push(client.from('reprovadas').delete().neq('numos', ''));
       else delR.forEach(function (x) {
         ops.push(client.from('reprovadas').delete().eq('numos', x.numos).eq('origem', x.origem));
       });
     }
     chunk(newI, BATCH).forEach(function (b) { ops.push(client.from('importacoes').insert(b)); });
     if (delI) ops.push(client.from('importacoes').delete().neq('id', -1));
-    if (cfgChanged) ops.push(client.from('config').upsert({ key: 'distrib', valor: cache.cfg || {} }, { onConflict: 'key' }));
+    if (cfgChanged) ops.push(client.from('config').upsert({ key: 'distrib', valor: target.cfg || {} }, { onConflict: 'key' }));
 
-    if (!ops.length) { baseline = JSON.stringify(cache); return Promise.resolve(); }
+    if (!ops.length) { baseline = JSON.stringify(target); return Promise.resolve(); }
     return Promise.all(ops).then(function (rs) {
       var err = null;
       rs.forEach(function (r) { if (r && r.error) err = r.error; });
       if (err) return { error: err.message };
-      pendingI.forEach(function (x) { x._synced = true; });
-      baseline = JSON.stringify(cache);
+      pendingI.forEach(function (p) {
+        if (target.imports[p.index]) target.imports[p.index]._synced = true;
+        var live = cache.imports && cache.imports[p.index];
+        if (live && live.ts === p.ts) live._synced = true;
+      });
+      baseline = JSON.stringify(target);
       return { error: null };
     });
   }
@@ -274,7 +292,13 @@
     // re-busca do servidor (após ações que afetam outros usuários)
     refresh: async function () {
       if (!remoteReady) return false;
-      try { return await loadRemote(); } catch (e) { return false; }
+      try {
+        // Espera todas as gravações pendentes antes de buscar. Evita que uma
+        // resposta antiga sobrescreva o cache logo após pegar/alterar uma OS.
+        var pending = await chain;
+        var loaded = await loadRemote();
+        return !!loaded && !(pending && pending.error);
+      } catch (e) { return false; }
     },
     enabled: function () { return remoteReady; },
     onError: function (fn) { errorHandler = fn; },

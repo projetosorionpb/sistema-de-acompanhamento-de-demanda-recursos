@@ -36,12 +36,14 @@ Abrir `http://localhost:8080/login.html` e entrar com uma conta criada em
 
 Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cidade, período) → **Comparar bases** → **Jogar no banco** (incremental: soma sem apagar; preserva status/responsável; reprovada não volta; quarentena virada congruente é promovida) → gerenciar quarentena e caixa.
 
+**Regra dos filtros da comparação:** cada planilha é filtrada por regional, serviço, cidade e data. O conjunto comparado é a união dos NUMOS que passaram em pelo menos uma base; para esses NUMOS, o sistema traz também o registro correspondente da outra planilha para identificar conflitos de CODSERV. Se nenhum dos lados passar nos filtros, a OS fica fora da comparação, quarentena e banco. Com filtro de data ativo, linha sem data válida não passa.
+
 ## Novidades
 
 - **Quarentena em massa (admin):** Aprovar filtrados → caixa, Apagar filtrados, Apagar TUDO (dupla confirmação; arquiva como reprovada p/ não voltar; caixa nunca é tocada).
 - **Duplicadas na importação:** OS congruente que **já está na caixa** vai para a quarentena como **JÁ NA CAIXA** para o admin revisar (opção “Já está na caixa → quarentena”, pode desmarcar para só ignorar).
 - **Caixa individual + privacidade:** usuário trabalha em **Minha caixa** × **Disponíveis**; ninguém (exceto admin) vê nem as OS nem as quantidades dos outros. Métrica própria de **encerradas hoje** na caixa; admin vê **Hoje ✅ / Em mãos / Total** por pessoa em Acompanhar usuários.
-- **Métricas (admin):** nova tela **📈 Métricas** — encerradas por usuário e por dia em Hoje, Últimos 7/30 dias, Este mês ou período personalizado, com export CSV. A prévia do Comparar bases agora avisa **vítimas do filtro** e **quarentena zerada suspeita** (mesmo arquivo nos 2 campos).
+- **Métricas (admin):** tela **Métricas** — encerradas por usuário e por dia em Hoje, Últimos 7/30 dias, Este mês ou período personalizado, com export CSV. A prévia detalha quantas linhas passaram pelos filtros em cada base, pares incluídos para detectar divergências e OS excluídas por não passarem em nenhuma.
 - **Conflitos SIATE×LIST:** OS nas duas bases com **serviço diferente** não vai direto p/ caixa — abre **modal** de incongruências e vai para a aba **⚔️ Conflitos** da quarentena, com valores lado a lado e botões **P/ caixa (SIATE)** / **P/ caixa (LIST)** / Reprovar. Abas separadas: Conflitos, Só SIATE, Só LIST, Já na caixa.
 - **Distribuição automática (admin):** tela **Distribuição** — ativa/desativa geral, **liga/desliga o automático por usuário** (linha **Auto**) e cota (padrão + individual; 0 pula). Quem zera as abertas recebe sozinho (mais antigas primeiro): no login, na importação e ao encerrar a última. Admins não recebem.
 - **Ocorrências:** OS em ocorrência sai da caixa e fica em **Ocorrências** (com o motivo). Botão **Ocorrência resolvida** devolve à caixa (usuário responsável ou admin).

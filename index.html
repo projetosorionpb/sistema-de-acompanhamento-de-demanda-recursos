@@ -15,14 +15,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261013e">
+<link rel="stylesheet" href="css/style.css?v=20261013f">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js?v=20261013e"></script>
-<script src="js/auth.js?v=20261013e"></script>
-<script src="js/db.js?v=20261013e"></script>
-<script src="js/icons.js?v=20261013e"></script>
-<script src="js/theme.js?v=20261013e"></script>
+<script src="js/config.js?v=20261013f"></script>
+<script src="js/auth.js?v=20261013f"></script>
+<script src="js/db.js?v=20261013f"></script>
+<script src="js/icons.js?v=20261013f"></script>
+<script src="js/theme.js?v=20261013f"></script>
 </head>
 <body>
 
@@ -145,6 +145,7 @@
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray"><span data-icon="database" data-size="16"></span></div><div class="stat-label">SIATE válidas</div></div><div class="stat-value" id="st-si">0</div><div class="stat-sub" id="result-msg">—</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray"><span data-icon="clipboard" data-size="16"></span></div><div class="stat-label">LIST válidas</div></div><div class="stat-value" id="st-li">0</div><div class="stat-sub">base gerenciador</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green"><span data-icon="check" data-size="16"></span></div><div class="stat-label">Congruentes</div></div><div class="stat-value" id="st-ok" style="color:var(--green)">0</div><div class="stat-sub">→ caixa principal</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow"><span data-icon="alert-circle" data-size="16"></span></div><div class="stat-label">Conflitos</div></div><div class="stat-value" id="st-conf" style="color:var(--yellow)">0</div><div class="stat-sub">serviços divergentes</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow"><span data-icon="alert" data-size="16"></span></div><div class="stat-label">Só SIATE</div></div><div class="stat-value" id="st-ssi" style="color:var(--yellow)">0</div><div class="stat-sub">→ quarentena</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-red"><span data-icon="alert" data-size="16"></span></div><div class="stat-label">Só LIST</div></div><div class="stat-value" id="st-sli" style="color:var(--red)">0</div><div class="stat-sub">→ quarentena</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-blue"><span data-icon="inbox" data-size="16"></span></div><div class="stat-label">No banco · principal</div></div><div class="stat-value" id="st-p">0</div><div class="stat-sub">caixa da equipe</div></div>
@@ -568,7 +569,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261013e"></script>
+<script src="js/app.js?v=20261013f"></script>
 <script>
   // Drawer mobile (navegação das views fica no app.js via window.SADshow)
   document.getElementById('menu-btn').addEventListener('click', function () {
