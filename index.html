@@ -11,6 +11,7 @@
     if (_t === 'light') document.documentElement.setAttribute('data-theme', 'light');
   } catch (e) {}
 </script>
+<link rel="icon" type="image/svg+xml" href="assets/engeselt.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -30,10 +31,9 @@
   <!-- ── Sidebar ── -->
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <div class="brand-mark"><span data-icon="brand" data-size="20"></span></div>
+      <div class="brand-mark"><img src="assets/engeselt.svg" alt="Engeselt"></div>
       <div>
         <div class="brand-name">Acompanhamento<br>de Demanda</div>
-        <div class="brand-sub">Orion · SIATE × LIST</div>
       </div>
     </div>
     <nav class="nav">
@@ -492,6 +492,17 @@
       <button class="btn-ghost" id="modal-btn-confl" style="padding:10px 16px;font-size:12.5px"><span data-icon="alert" data-size="15"></span>Revisar conflitos</button>
       <button class="btn-ghost" id="modal-btn-quar" style="padding:10px 16px;font-size:12.5px"><span data-icon="shield" data-size="15"></span>Ver quarentena</button>
       <button class="btn-primary" id="modal-btn-ok" style="flex:1;min-width:140px">Entendi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de OS por usuário (admin) -->
+<div class="modal-overlay" id="modal-user" style="display:none">
+  <div class="modal-card">
+    <div class="modal-title" id="modal-user-title">OS do usuário</div>
+    <div class="modal-body" id="modal-user-body"></div>
+    <div class="modal-btns">
+      <button class="btn-primary" id="modal-user-ok" style="flex:1">Fechar</button>
     </div>
   </div>
 </div>

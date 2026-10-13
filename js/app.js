@@ -1032,7 +1032,9 @@
         '<td><span class="badge badge-red">' + g.pen + '</span></td>' +
         '<td><span class="badge badge-green">' + g.enc + '</span></td>' +
         '<td class="mono" style="font-size:11px;max-width:280px">' + esc(g.oss.join(', ')) + (g.total > g.oss.length ? ' …' : '') + '</td>' +
-        '<td><button class="btn-small" data-act="ver-caixa" data-resp="' + esc(k) + '">Ver na caixa</button></td></tr>';
+        '<td style="white-space:nowrap">' +
+        (k ? '<button class="btn-small" data-act="ver-os" data-email="' + esc(k) + '">Ver OS</button> ' : '') +
+        '<button class="btn-small" data-act="ver-caixa" data-resp="' + esc(k) + '">Ver na caixa</button></td></tr>';
     });
     el.innerHTML = h + '</tbody></table></div>' +
       '<div class="panel-hint">“Hoje” = OS com status ENCERRADO registrado hoje para essa pessoa. Só aparecem pessoas com OS; contas sem OS não listam.</div>';
@@ -1155,14 +1157,15 @@
         hu.innerHTML = '<div class="no-results"><div class="big">' + SADICON('chart', 38) + '</div>Sem dados.<br>Cadastre usuários e importe OS para ver as métricas.</div>';
       } else {
         var h = '<div class="table-wrap"><table><thead><tr>' +
-          '<th>Usuário</th><th>Perfil</th><th>Encerradas (período)</th><th>Em mãos</th><th>Total na caixa</th>' +
+          '<th>Usuário</th><th>Perfil</th><th>Encerradas (período)</th><th>Em mãos</th><th>Total na caixa</th><th></th>' +
           '</tr></thead><tbody>';
         rows.forEach(function (g) {
           h += '<tr><td class="mono">' + esc(g.email) + '</td>' +
             '<td>' + (g.role === 'admin' ? '<span class="badge badge-yellow">ADMIN</span>' : '<span class="badge badge-gray">USUÁRIO</span>') + '</td>' +
             '<td><span class="badge badge-green">' + g.enc + '</span></td>' +
             '<td class="mono"><b>' + g.maos + '</b></td>' +
-            '<td class="mono">' + g.total + '</td></tr>';
+            '<td class="mono">' + g.total + '</td>' +
+            '<td style="white-space:nowrap"><button class="btn-small" data-act="ver-os" data-email="' + esc(g.email) + '">Ver OS</button></td></tr>';
         });
         hu.innerHTML = h + '</tbody></table></div>';
       }
@@ -1201,6 +1204,55 @@
     }).join('\r\n');
     downloadBlob(new Blob([txt], { type: 'text/csv;charset=utf-8' }), 'metricas_' + r.ini + '_' + r.fim + '.csv');
   }
+
+  // ---------- OS de um usuário (admin: métricas / acompanhar) ----------
+  function openUserOS(email) {
+    var ov = $('modal-user'), body = $('modal-user-body'), title = $('modal-user-title');
+    if (!ov || !body) return;
+    var db = loadDB();
+    var em = String(email || '').toLowerCase();
+    var list = db.principal.filter(function (p) { return String(p.responsavel || '').toLowerCase() === em; });
+    var map = { 'A INICIAR': 0, 'EM ANDAMENTO': 0, 'PENDENTE': 0, 'ENCERRADO': 0 };
+    list.forEach(function (p) { if (map[p.statusDemanda] !== undefined) map[p.statusDemanda]++; });
+    var user = (typeof getUsers === 'function' ? getUsers() : []).filter(function (u) { return String(u.email).toLowerCase() === em; })[0];
+    if (title) title.textContent = 'OS de ' + (user ? user.email : (email || '—')) + ' — ' + list.length + ' na caixa';
+    var filter = 'TODOS';
+    function chip(val, label, n) {
+      return '<span class="chip' + (filter === val ? ' active' : '') + '" data-uf="' + val + '">' + esc(label) + ' <b>' + n + '</b></span>';
+    }
+    function render() {
+      var rows = list.filter(function (p) { return filter === 'TODOS' || p.statusDemanda === filter; });
+      var html = '<div class="status-filter" style="margin-bottom:14px">' +
+        chip('TODOS', 'Todos', list.length) +
+        chip('A INICIAR', 'A iniciar', map['A INICIAR']) +
+        chip('EM ANDAMENTO', 'Em andamento', map['EM ANDAMENTO']) +
+        chip('PENDENTE', 'Em ocorrência', map['PENDENTE']) +
+        chip('ENCERRADO', 'Encerrado', map['ENCERRADO']) +
+        '</div>';
+      if (!rows.length) {
+        html += '<div class="no-results">Nenhuma OS nesse filtro.</div>';
+      } else {
+        html += '<div class="table-wrap"><table style="min-width:0"><thead><tr>' +
+          '<th>NUM OS</th><th>CODSERV</th><th>CIDADE</th><th>DATA SOL</th><th>STATUS</th>' +
+          '</tr></thead><tbody>';
+        rows.forEach(function (p) {
+          html += '<tr><td><span class="os-id">' + esc(p.numos) + '</span></td>' +
+            '<td class="mono">' + esc(p.codserv || '—') + '</td>' +
+            '<td>' + esc(p.cidade || '—') + '</td>' +
+            '<td class="mono">' + esc(p.dataISO || p.datasol || '—') + '</td>' +
+            '<td>' + statusBadge(p.statusDemanda) + '</td></tr>';
+        });
+        html += '</tbody></table></div><div class="panel-hint">' + rows.length + ' OS listada(s).</div>';
+      }
+      body.innerHTML = html;
+      body.querySelectorAll('[data-uf]').forEach(function (c) {
+        c.addEventListener('click', function () { filter = c.getAttribute('data-uf'); render(); });
+      });
+    }
+    render();
+    ov.style.display = 'flex';
+  }
+  function closeUserOS() { var ov = $('modal-user'); if (ov) ov.style.display = 'none'; }
 
   // ---------- distribuição automática (admin configura, sistema entrega) ----------
   // Config compartilhada na nuvem (tabela `config`), via js/db.js.
@@ -1601,6 +1653,10 @@
     if (mbo) mbo.addEventListener('click', hideConflModal);
     var mov = $('modal-div');
     if (mov) mov.addEventListener('click', function (e) { if (e.target === mov) hideConflModal(); });
+    var muo = $('modal-user-ok');
+    if (muo) muo.addEventListener('click', closeUserOS);
+    var muov = $('modal-user');
+    if (muov) muov.addEventListener('click', function (e) { if (e.target === muov) closeUserOS(); });
 
     var ex1 = $('btn-exp-csv');
     if (ex1) ex1.addEventListener('click', exportQuarCSV);
@@ -1699,6 +1755,7 @@
           refreshIfShared('OS ' + os + ' devolvida aos disponíveis.' + refill2);
         }
       }
+      if (act === 'ver-os') { openUserOS(btn.getAttribute('data-email') || ''); return; }
       if (act === 'ver-caixa') {
         var resp = btn.getAttribute('data-resp') || '';
         state.cf.resp = resp ? resp : '__NONE__';

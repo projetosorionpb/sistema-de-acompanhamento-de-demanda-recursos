@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Engeselt">
+  <!-- arco superior (amarelo) -->
+  <path d="M20.5 74.4 A42 42 0 1 1 101.6 54.1" fill="none" stroke="#F5B301" stroke-width="17" stroke-linecap="round"/>
+  <!-- arco inferior (cinza) -->
+  <path d="M101.6 65.9 A42 42 0 0 1 18.4 65.9" fill="none" stroke="#808285" stroke-width="17" stroke-linecap="round"/>
+  <!-- raio central -->
+  <path d="M30 78 L64 42 L56.5 64 L88 56.5 L46 96 L54 73 Z" fill="#F5B301"/>
+</svg>
