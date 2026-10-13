@@ -2025,8 +2025,6 @@
       document.querySelectorAll('.admin-only').forEach(function (el) { el.style.display = 'none'; });
       var up = $('panel-upload');
       if (up) up.style.display = 'none';
-      var nq = $('not-admin');
-      if (nq) nq.style.display = '';
     }
     window.SADshow = function (v) { showView(v); };
     bindEvents();
