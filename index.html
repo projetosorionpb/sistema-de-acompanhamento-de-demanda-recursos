@@ -15,14 +15,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261013c">
+<link rel="stylesheet" href="css/style.css?v=20261013d">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js?v=20261013c"></script>
-<script src="js/auth.js?v=20261013c"></script>
-<script src="js/db.js?v=20261013c"></script>
-<script src="js/icons.js?v=20261013c"></script>
-<script src="js/theme.js?v=20261013c"></script>
+<script src="js/config.js?v=20261013d"></script>
+<script src="js/auth.js?v=20261013d"></script>
+<script src="js/db.js?v=20261013d"></script>
+<script src="js/icons.js?v=20261013d"></script>
+<script src="js/theme.js?v=20261013d"></script>
 </head>
 <body>
 
@@ -40,6 +40,7 @@
       <div class="nav-label">Operação</div>
       <button class="nav-item" data-nav="caixa"><span class="ni" data-icon="inbox"></span>Caixa principal<span class="nb" id="tab-n-p">0</span></button>
       <button class="nav-item" data-nav="encerrados"><span class="ni" data-icon="check-circle"></span>Encerrados</button>
+      <button class="nav-item" data-nav="ocorrencias"><span class="ni" data-icon="alert-circle"></span>Ocorrências<span class="nb" id="tab-n-o">0</span></button>
       <button class="nav-item admin-only" data-nav="quarentena"><span class="ni" data-icon="shield"></span>Quarentena<span class="nb" id="tab-n-q">0</span></button>
       <button class="nav-item admin-only" data-nav="acompanhar"><span class="ni" data-icon="users"></span>Acompanhar usuários</button>
       <button class="nav-item admin-only" data-nav="metricas"><span class="ni" data-icon="chart"></span>Métricas</button>
@@ -108,7 +109,7 @@
               </div>
             </div>
             <div id="dist-tbl" style="margin-top:14px"></div>
-            <div class="panel-hint">Regra: vale para contas <b>usuário</b> (admins não recebem). Quem está com <b>zero OS aberta</b> (nada ou tudo ENCERRADO) ganha a cota das <b>mais antigas disponíveis</b>. Qtd individual vazia = usa o padrão; 0 = pula a pessoa.</div>
+            <div class="panel-hint">Regra: vale para contas <b>usuário</b> (admins não recebem). Cada pessoa tem o <b>Auto</b> (liga/desliga a distribuição automática só dela) e a <b>Qtd individual</b> (vazia = usa o padrão; 0 = pula). Quem está com <b>zero OS aberta</b> ganha a cota das <b>mais antigas disponíveis</b>.</div>
             <div class="log-box" id="dist-log">Distribuição nunca executada.</div>
           </div>
         </div>
@@ -310,7 +311,6 @@
           <span class="chip active" data-st="TODOS">Todos</span>
           <span class="chip" data-st="A INICIAR">A iniciar</span>
           <span class="chip" data-st="EM ANDAMENTO">Em andamento</span>
-          <span class="chip" data-st="OCORRENCIA">Ocorrência</span>
         </div>
         <div class="status-filter" id="scope-row" style="display:none">
           <span class="chip active" data-scope="mine"><span data-icon="user" data-size="14"></span> Minha caixa <b id="scope-n-mine">0</b></span>
@@ -341,6 +341,27 @@
             <span class="panel-step" id="enc-count">0 encerrada(s)</span>
           </div>
           <div class="panel-body" id="tbl-encerrados"></div>
+        </div>
+      </section>
+
+      <!-- ═══ VIEW: OCORRÊNCIAS (todos) ═══ -->
+      <section id="view-ocorrencias" style="display:none">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon" data-icon="search" data-size="16"></span>
+            <input type="text" id="q-oco" placeholder="Buscar por NUM OS, cliente, cidade, motivo…" autocomplete="off">
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon"><span data-icon="alert-circle"></span></div>
+            <div>
+              <div class="panel-title">Ocorrências</div>
+              <div class="panel-subtitle">OS paradas por ocorrência · ao resolver, volta para a caixa</div>
+            </div>
+            <span class="panel-step" id="oco-count">0 em ocorrência</span>
+          </div>
+          <div class="panel-body" id="tbl-ocorrencias"></div>
         </div>
       </section>
 
@@ -547,7 +568,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261013c"></script>
+<script src="js/app.js?v=20261013d"></script>
 <script>
   // Drawer mobile (navegação das views fica no app.js via window.SADshow)
   document.getElementById('menu-btn').addEventListener('click', function () {

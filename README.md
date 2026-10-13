@@ -5,7 +5,7 @@ Repositório: https://github.com/projetosorionpb/sistema-de-acompanhamento-de-de
 ## O que é
 
 Conciliação **SIATE × LIST** pela chave **NUMOS exata**:
-- **Congruentes** (nas 2 bases) → **caixa principal**, usuários pegam e trabalham (status: `A INICIAR`, `EM ANDAMENTO`, `OCORRENCIA`, `ENCERRADO`). Encerradas saem da caixa e vão para a tela **Encerrados**; ao marcar **Ocorrência**, abre um modal para o motivo.
+- **Congruentes** (nas 2 bases) → **caixa principal**, usuários pegam e trabalham (status: `A INICIAR`, `EM ANDAMENTO`). Marcar **Ocorrência** tira a OS da caixa (vai para **Ocorrências**, com motivo) e, ao **resolver** (usuário ou admin), ela volta para a caixa. **Encerrar** leva para **Encerrados**. Usuário não libera OS; admin pode retirar OS de qualquer pessoa.
 - **Divergentes** (só em uma) → **quarentena**, admin **aprova** (→ caixa) ou **reprova**
 
 Identidade visual: SaaS empresarial (dark/light, laranja `#f0a500`, Inter + Space Mono), ícones **SVG** (sem emojis).
@@ -43,7 +43,9 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 - **Caixa individual + privacidade:** usuário trabalha em **Minha caixa** × **Disponíveis**; ninguém (exceto admin) vê nem as OS nem as quantidades dos outros. Métrica própria de **encerradas hoje** na caixa; admin vê **Hoje ✅ / Em mãos / Total** por pessoa em Acompanhar usuários.
 - **Métricas (admin):** nova tela **📈 Métricas** — encerradas por usuário e por dia em Hoje, Últimos 7/30 dias, Este mês ou período personalizado, com export CSV. A prévia do Comparar bases agora avisa **vítimas do filtro** e **quarentena zerada suspeita** (mesmo arquivo nos 2 campos).
 - **Conflitos SIATE×LIST:** OS nas duas bases com **serviço diferente** não vai direto p/ caixa — abre **modal** de incongruências e vai para a aba **⚔️ Conflitos** da quarentena, com valores lado a lado e botões **P/ caixa (SIATE)** / **P/ caixa (LIST)** / Reprovar. Abas separadas: Conflitos, Só SIATE, Só LIST, Já na caixa.
-- **Distribuição automática (admin):** tela **Distribuição** — ativa/desativa, cota padrão igual p/ todos + cota individual por usuário (0 pula). Quem zera as abertas recebe sozinho (mais antigas primeiro): no login, na importação e ao encerrar a última. Admins não recebem.
+- **Distribuição automática (admin):** tela **Distribuição** — ativa/desativa geral, **liga/desliga o automático por usuário** (linha **Auto**) e cota (padrão + individual; 0 pula). Quem zera as abertas recebe sozinho (mais antigas primeiro): no login, na importação e ao encerrar a última. Admins não recebem.
+- **Ocorrências:** OS em ocorrência sai da caixa e fica em **Ocorrências** (com o motivo). Botão **Ocorrência resolvida** devolve à caixa (usuário responsável ou admin).
+- **Admin retira OS:** no **Ver OS** (Métricas/Acompanhar) o admin tem **Retirar** — a OS volta para os disponíveis.
 - **Ordenação da caixa:** select + clique no cabeçalho **NUM OS / DATA SOL** (mais antigas ↔ mais novas) — ideal p/ importação diária.
 - **Multiusuário (Supabase):** login e dados **somente na nuvem** — todos veem a mesma caixa/quarentena. Contas e papéis são geridos no Dashboard (**Authentication → Users** e **Table Editor → profiles**). Sem logins demo e sem dados no navegador.
 - **Banco compartilhado (Supabase):** `js/db.js` carrega as tabelas em cache e grava por diff (INSERT/UPDATE/DELETE, em lotes). Se a nuvem não responder, o app avisa e **não** grava localmente. O topo mostra **☁ Compartilhado** (ou ⚠ Sem banco / ⚙ Não configurado).

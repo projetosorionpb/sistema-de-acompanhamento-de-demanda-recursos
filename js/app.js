@@ -16,17 +16,19 @@
     metrics: { preset: 'hoje', dini: '', dfim: '', user: '' }, // métricas do admin
     resumo: { preset: 'hoje', dini: '', dfim: '' }, // período do resumo do usuário
     encSearch: '', // busca da tela Encerrados
+    ocoSearch: '', // busca da tela Ocorrências
     scope: 'mine', // usuário: 'mine' (minha caixa) | 'pool' (disponíveis); admin vê tudo
     sort: { key: 'data-desc' }, // data-desc | data-asc | os-desc | os-asc (clicável no th + select)
     qf: { origem: '', codserv: '' }, // filtros da quarentena
-    pagePrincipal: 1, pageQuar: 1, pageEnc: 1,
+    pagePrincipal: 1, pageQuar: 1, pageEnc: 1, pageOco: 1,
     isAdmin: false, user: null,
     codservOptions: [],
   };
 
   var VIEW_TITLES = {
-    caixa: ['Caixa principal', 'Demandas em aberto (a iniciar, em andamento ou ocorrência) para a equipe trabalhar.'],
+    caixa: ['Caixa principal', 'Demandas em aberto (a iniciar, em andamento) para a equipe trabalhar.'],
     encerrados: ['Encerrados', 'OS concluídas — saíram da caixa e ficam aqui para consulta.'],
+    ocorrencias: ['Ocorrências', 'OS paradas por ocorrência — voltam à caixa do usuário quando resolvidas.'],
     quarentena: ['Quarentena', 'Divergências: tem em uma base e não tem na outra. O admin aprova ou reprova.'],
     importar: ['Importar bases', 'Suba as duas bases (admin), ajuste os filtros e jogue no banco.'],
     distribuir: ['Distribuição', 'Cota automática de OS por usuário: quem zera recebe sozinho.'],
@@ -39,7 +41,7 @@
   function showView(v) {
     if (ADMIN_VIEWS.indexOf(v) !== -1 && !state.isAdmin) v = 'caixa';
     state.view = v;
-    var map = { caixa: 'view-principal', encerrados: 'view-encerrados', quarentena: 'view-quarentena', importar: 'view-importar', resumo: 'view-resumo', acompanhar: 'view-acompanhar', metricas: 'view-metricas', distribuir: 'view-distribuir' };
+    var map = { caixa: 'view-principal', encerrados: 'view-encerrados', ocorrencias: 'view-ocorrencias', quarentena: 'view-quarentena', importar: 'view-importar', resumo: 'view-resumo', acompanhar: 'view-acompanhar', metricas: 'view-metricas', distribuir: 'view-distribuir' };
     Object.keys(map).forEach(function (k) {
       var el = $(map[k]);
       if (el) el.style.display = (k === v) ? '' : 'none';
@@ -55,6 +57,7 @@
     if (v === 'metricas') renderMetricas();
     if (v === 'distribuir') renderDistribuicao();
     if (v === 'encerrados') renderEncerrados();
+    if (v === 'ocorrencias') renderOcorrencias();
     if (v === 'resumo') { renderStats(); if (!state.isAdmin && $('page-desc')) $('page-desc').textContent = 'Seu desempenho: OS na sua caixa por status e encerradas.'; }
   }
 
@@ -536,7 +539,8 @@
     // (Admin vê tudo; quarentena/acompanhar já são só-admin.)
     var scope = state.isAdmin ? 'all' : (state.scope || 'mine');
     var out = db.principal.filter(function (p) {
-      if (p.statusDemanda === 'ENCERRADO') return false; // encerradas ficam na tela "Encerrados"
+      // Encerradas e em ocorrência saem da caixa principal (têm telas próprias).
+      if (p.statusDemanda === 'ENCERRADO' || p.statusDemanda === 'OCORRENCIA') return false;
       if (scope === 'mine' && !isMine(p)) return false;
       if (scope === 'pool' && p.responsavel) return false;
       if (state.statusFilter !== 'TODOS' && p.statusDemanda !== state.statusFilter) return false;
@@ -647,6 +651,62 @@
     el.innerHTML = html;
     var enc = $('enc-count');
     if (enc) enc.textContent = list.length + ' encerrada(s)';
+  }
+
+  // ---------- Ocorrências (fora da caixa até resolver) ----------
+  function filteredOcorrencias(db) {
+    var q = String(state.ocoSearch || '').trim().toUpperCase();
+    var out = db.principal.filter(function (p) {
+      if (p.statusDemanda !== 'OCORRENCIA') return false;
+      if (!state.isAdmin && !isMine(p)) return false;
+      if (!q) return true;
+      return String(p.numos).indexOf(q) !== -1 ||
+        String(p.cliente || '').toUpperCase().indexOf(q) !== -1 ||
+        String(p.cidade || '').toUpperCase().indexOf(q) !== -1 ||
+        String(p.codserv || '').indexOf(q) !== -1 ||
+        String(p.motivoOcorrencia || '').toUpperCase().indexOf(q) !== -1 ||
+        String(p.responsavel || '').toUpperCase().indexOf(q) !== -1;
+    });
+    return sortPrincipal(out, state.sort.key);
+  }
+  function renderOcorrencias() {
+    var el = $('tbl-ocorrencias');
+    if (!el) return;
+    var db = loadDB();
+    var list = filteredOcorrencias(db);
+    var totalP = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    if (state.pageOco > totalP) state.pageOco = totalP;
+    var slice = list.slice((state.pageOco - 1) * PAGE_SIZE, state.pageOco * PAGE_SIZE);
+    var html = '';
+    if (!slice.length) {
+      html = '<div class="no-results"><div class="big">' + SADICON('alert-circle', 38) + '</div>Nenhuma OS em ocorrência' + (String(state.ocoSearch || '').trim() ? ' para essa busca.' : '.') + '</div>';
+    } else {
+      html = '<div class="table-wrap"><table><thead><tr>' +
+        '<th>NUM OS</th><th>CODSERV</th><th>CIDADE</th><th>CLIENTE</th>' +
+        (state.isAdmin ? '<th>RESPONSÁVEL</th>' : '') +
+        '<th>MOTIVO</th><th>AÇÕES</th></tr></thead><tbody>';
+      slice.forEach(function (p) {
+        var mine = isMine(p);
+        html += '<tr>' +
+          '<td><span class="os-id">' + esc(p.numos) + '</span></td>' +
+          '<td class="mono">' + esc(p.codserv || '—') + '</td>' +
+          '<td>' + esc(p.cidade || '—') + '</td>' +
+          '<td>' + esc(p.cliente || '—') + '</td>' +
+          (state.isAdmin ? '<td class="mono">' + esc(p.responsavel || '—') + '</td>' : '') +
+          '<td style="font-size:12px;max-width:320px">' + esc(p.motivoOcorrencia || '—') + '</td>' +
+          '<td style="white-space:nowrap">' +
+          ((state.isAdmin || mine) ? '<button class="btn-small ok" data-act="resolver-ocorrencia" data-os="' + esc(p.numos) + '">Ocorrência resolvida</button>' : '<span class="mono" style="font-size:11px;color:var(--text3)">—</span>') +
+          (state.isAdmin ? ' <button class="btn-small danger" data-act="liberar" data-os="' + esc(p.numos) + '">Liberar</button>' : '') +
+          '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+      html += '<div class="pagination"><button class="page-btn" data-pg="o-prev">‹</button>' +
+        '<span class="page-info">Pág ' + state.pageOco + '/' + totalP + ' • ' + list.length + ' itens</span>' +
+        '<button class="page-btn" data-pg="o-next">›</button></div>';
+    }
+    el.innerHTML = html;
+    var oc = $('oco-count');
+    if (oc) oc.textContent = list.length + ' em ocorrência';
   }
   function filteredQuar(db) {
     var q = state.search.trim().toUpperCase();
@@ -759,15 +819,22 @@
       $('tab-n-p').textContent = openT;
     } else {
       // Usuário não vê nem a quantidade dos outros: só minhas + disponíveis.
-      var mine0 = 0, pool0 = 0;
+      var mine0 = 0, pool0 = 0, oco0 = 0;
       db.principal.forEach(function (p) {
         if (p.statusDemanda === 'ENCERRADO') return;
-        if (isMine(p)) mine0++; else if (!p.responsavel) pool0++;
+        if (isMine(p)) { if (p.statusDemanda === 'OCORRENCIA') oco0++; else mine0++; }
+        else if (!p.responsavel) pool0++;
       });
-      $('count-badge').textContent = mine0 + ' minhas • ' + pool0 + ' disponíveis';
+      $('count-badge').textContent = mine0 + ' minhas • ' + oco0 + ' ocorrência • ' + pool0 + ' disponíveis';
       $('tab-n-p').textContent = mine0 + pool0;
     }
     $('tab-n-q').textContent = db.quarentena.length;
+    var ocoN = 0;
+    db.principal.forEach(function (p) {
+      if (p.statusDemanda !== 'OCORRENCIA') return;
+      if (state.isAdmin || isMine(p)) ocoN++;
+    });
+    if ($('tab-n-o')) $('tab-n-o').textContent = ocoN;
     renderResumoUser(db);
   }
 
@@ -805,10 +872,10 @@
         }
         return;
       }
+      if (p.statusDemanda === 'OCORRENCIA') { pen++; return; }
       mine++;
       if (p.statusDemanda === 'A INICIAR') ini++;
       else if (p.statusDemanda === 'EM ANDAMENTO') and++;
-      else if (p.statusDemanda === 'OCORRENCIA') pen++;
       if (p.encerradoEm) {
         var dk = dayKey(p.encerradoEm);
         if (dk && dk >= r.ini && dk <= r.fim) encPer++;
@@ -837,7 +904,7 @@
     if (state.isAdmin) { panel.style.display = 'none'; return; }
     panel.style.display = '';
     var db = loadDB();
-    var mine = 0, pool = 0, hoje = 0, tk = todayKey();
+    var mine = 0, pool = 0, hoje = 0, oco = 0, tk = todayKey();
     db.principal.forEach(function (p) {
       if (!p.responsavel) { pool++; return; }
       if (!isMine(p)) return;
@@ -845,10 +912,12 @@
         if (p.encerradoEm && dayKey(p.encerradoEm) === tk) hoje++;
         return;
       }
+      if (p.statusDemanda === 'OCORRENCIA') { oco++; return; }
       mine++;
     });
     el.innerHTML =
       '<span class="mi">' + SADICON('user', 15) + '<b>' + mine + '</b> na minha caixa</span>' +
+      '<span class="mi">' + SADICON('alert-circle', 15) + '<b>' + oco + '</b> em ocorrência</span>' +
       '<span class="mi">' + SADICON('check-circle', 15) + '<b>' + hoje + '</b> encerrada(s) hoje</span>' +
       '<span class="mi">' + SADICON('package', 15) + '<b>' + pool + '</b> disponível(is)</span>';
     var nm = $('scope-n-mine'), np = $('scope-n-pool');
@@ -1316,6 +1385,7 @@
       } else {
         html += '<div class="table-wrap"><table style="min-width:0"><thead><tr>' +
           '<th>NUM OS</th><th>CODSERV</th><th>CIDADE</th><th>DATA SOL</th><th>STATUS</th><th>MOTIVO</th>' +
+          (state.isAdmin ? '<th>AÇÕES</th>' : '') +
           '</tr></thead><tbody>';
         rows.forEach(function (p) {
           html += '<tr><td><span class="os-id">' + esc(p.numos) + '</span></td>' +
@@ -1323,13 +1393,35 @@
             '<td>' + esc(p.cidade || '—') + '</td>' +
             '<td class="mono">' + esc(p.dataISO || p.datasol || '—') + '</td>' +
             '<td>' + statusBadge(p.statusDemanda) + '</td>' +
-            '<td style="font-size:12px;max-width:280px">' + esc(p.motivoOcorrencia || '—') + '</td></tr>';
+            '<td style="font-size:12px;max-width:280px">' + esc(p.motivoOcorrencia || '—') + '</td>' +
+            (state.isAdmin ? '<td style="white-space:nowrap"><button class="btn-small danger" data-ulos="' + esc(p.numos) + '">Retirar</button></td>' : '') +
+            '</tr>';
         });
         html += '</tbody></table></div><div class="panel-hint">' + rows.length + ' OS listada(s).</div>';
       }
       body.innerHTML = html;
       body.querySelectorAll('[data-uf]').forEach(function (c) {
         c.addEventListener('click', function () { filter = c.getAttribute('data-uf'); render(); });
+      });
+      body.querySelectorAll('[data-ulos]').forEach(function (c) {
+        c.addEventListener('click', function () {
+          var numos = c.getAttribute('data-ulos');
+          if (!confirm('Retirar a OS ' + numos + ' de ' + (email || '') + '? Ela volta para os disponíveis.')) return;
+          var d = loadDB();
+          var px = d.principal.find(function (x) { return x.numos === numos; });
+          if (px) {
+            px.responsavel = null; px.statusDemanda = 'A INICIAR';
+            px.encerradoEm = null; px.encerradoPor = null; px.motivoOcorrencia = '';
+            saveDB(d);
+          }
+          // recarrega o modal com os dados atualizados
+          db = loadDB();
+          list = db.principal.filter(function (p) { return String(p.responsavel || '').toLowerCase() === em; });
+          map = { 'A INICIAR': 0, 'EM ANDAMENTO': 0, 'OCORRENCIA': 0, 'ENCERRADO': 0 };
+          list.forEach(function (p) { if (map[p.statusDemanda] !== undefined) map[p.statusDemanda]++; });
+          render();
+          renderAll('OS ' + numos + ' retirada de ' + (email || '') + '.');
+        });
       });
     }
     render();
@@ -1371,7 +1463,7 @@
 
   // ---------- distribuição automática (admin configura, sistema entrega) ----------
   // Config compartilhada na nuvem (tabela `config`), via js/db.js.
-  function defaultCfg() { return { distrib: { enabled: false, qty: 10, per: {} } }; }
+  function defaultCfg() { return { distrib: { enabled: false, qty: 10, per: {}, autoOff: {} } }; }
   function loadCfg() {
     try {
       if (window.SADDB) {
@@ -1440,6 +1532,7 @@
     var assigned = {}, total = 0, now = new Date().toISOString();
     targets.forEach(function (email) {
       if (!pool.length) return;
+      if ((cfg.autoOff || {})[String(email).toLowerCase()]) return; // auto desligada p/ essa pessoa
       if (openCount(db, email) > 0) return; // só quem zerou
       var q = distQtyFor(email, cfg);
       if (q <= 0) return;
@@ -1464,7 +1557,8 @@
   function renderDistribuicao() {
     if (!state.isAdmin) return;
     var cfg = loadCfg();
-    cfg.distrib = cfg.distrib || { enabled: false, qty: 10, per: {} };
+    cfg.distrib = cfg.distrib || { enabled: false, qty: 10, per: {}, autoOff: {} };
+    cfg.distrib.autoOff = cfg.distrib.autoOff || {};
     var pill = $('pill-dist-enabled'), chk = $('dist-enabled');
     if (chk) chk.checked = !!cfg.distrib.enabled;
     if (pill) pill.classList.toggle('on', !!cfg.distrib.enabled);
@@ -1477,15 +1571,20 @@
       if (!users.length) {
         el.innerHTML = '<div class="no-results"><div class="big">' + SADICON('truck', 38) + '</div>Sem usuários cadastrados.</div>';
       } else {
-        var h = '<div class="table-wrap"><table style="min-width:520px"><thead><tr>' +
-          '<th>Usuário</th><th>Perfil</th><th>Abertas</th><th>Qtd individual</th>' +
+        var h = '<div class="table-wrap"><table style="min-width:620px"><thead><tr>' +
+          '<th>Usuário</th><th>Perfil</th><th>Auto</th><th>Abertas</th><th>Qtd individual</th>' +
           '</tr></thead><tbody>';
         users.forEach(function (u) {
+          var isUser = u.role === 'usuario';
           var ov = (cfg.distrib.per || {})[String(u.email).toLowerCase()];
+          var off = !!(cfg.distrib.autoOff || {})[String(u.email).toLowerCase()];
           h += '<tr><td class="mono">' + esc(u.email) + '</td>' +
             '<td>' + (u.role === 'admin' ? '<span class="badge badge-yellow">ADMIN</span>' : '<span class="badge badge-gray">USUÁRIO</span>') + '</td>' +
-            '<td class="mono">' + (u.role === 'usuario' ? openCount(db, u.email) : '—') + '</td>' +
-            '<td>' + (u.role === 'usuario'
+            '<td>' + (isUser
+              ? '<label class="check-pill' + (off ? '' : ' on') + '" style="padding:5px 10px"><input type="checkbox" data-dist-auto="' + esc(u.email) + '"' + (off ? '' : ' checked') + '>Auto</label>'
+              : '<span class="mono" style="font-size:11px;color:var(--text3)">—</span>') + '</td>' +
+            '<td class="mono">' + (isUser ? openCount(db, u.email) : '—') + '</td>' +
+            '<td>' + (isUser
               ? '<input type="number" min="0" max="500" step="1" data-dist-qty="' + esc(u.email) + '" value="' + esc(ov === undefined ? '' : ov) + '" placeholder="' + esc(cfg.distrib.qty) + '" style="width:90px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:6px 9px;font-size:12px">'
               : '<span class="mono" style="font-size:11px;color:var(--text3)">não recebe</span>') + '</td></tr>';
         });
@@ -1608,6 +1707,7 @@
     populateQuarFilters(db);
     renderTables(msg);
     renderEncerrados();
+    renderOcorrencias();
     if (state.isAdmin) {
       var sr = $('scope-row');
       if (sr) sr.style.display = 'none';
@@ -1785,6 +1885,11 @@
       qe.addEventListener('input', function () { state.encSearch = qe.value || ''; state.pageEnc = 1; renderEncerrados(); });
       qe.addEventListener('keydown', function (e) { if (e.key === 'Enter') { state.encSearch = qe.value || ''; state.pageEnc = 1; renderEncerrados(); } });
     }
+    var qo = $('q-oco');
+    if (qo) {
+      qo.addEventListener('input', function () { state.ocoSearch = qo.value || ''; state.pageOco = 1; renderOcorrencias(); });
+      qo.addEventListener('keydown', function (e) { if (e.key === 'Enter') { state.ocoSearch = qo.value || ''; state.pageOco = 1; renderOcorrencias(); } });
+    }
 
     var ex1 = $('btn-exp-csv');
     if (ex1) ex1.addEventListener('click', exportQuarCSV);
@@ -1849,6 +1954,8 @@
       if (pg === 'q-next') { state.pageQuar++; renderAll(); }
       if (pg === 'e-prev' && state.pageEnc > 1) { state.pageEnc--; renderEncerrados(); }
       if (pg === 'e-next') { state.pageEnc++; renderEncerrados(); }
+      if (pg === 'o-prev' && state.pageOco > 1) { state.pageOco--; renderOcorrencias(); }
+      if (pg === 'o-next') { state.pageOco++; renderOcorrencias(); }
 
       var btn = e.target.closest ? e.target.closest('[data-act]') : null;
       if (!btn) return;
@@ -1872,7 +1979,7 @@
           if (!state.isAdmin && p2.responsavel && !isMine(p2)) { alert('Essa OS já está com outro usuário.'); return; }
           var who = p2.responsavel || ((state.user && state.user.email) || '');
           p2.responsavel = null; p2.statusDemanda = 'A INICIAR';
-          p2.encerradoEm = null; p2.encerradoPor = null;
+          p2.encerradoEm = null; p2.encerradoPor = null; p2.motivoOcorrencia = '';
           saveDB(db);
           var refill2 = '';
           if (who) {
@@ -1886,6 +1993,20 @@
         }
       }
       if (act === 'ver-os') { openUserOS(btn.getAttribute('data-email') || ''); return; }
+      if (act === 'resolver-ocorrencia') {
+        var po = db.principal.find(function (x) { return x.numos === os; });
+        if (!po) return;
+        if (!state.isAdmin && !isMine(po)) { alert('Essa OS está com outro usuário.'); return; }
+        if (!confirm('Ocorrência resolvida? A OS volta para a caixa e sai de Ocorrências.')) return;
+        po.statusDemanda = 'EM ANDAMENTO';
+        po.motivoOcorrencia = '';
+        po.encerradoEm = null; po.encerradoPor = null;
+        if (!po.responsavel) po.responsavel = (state.user && state.user.email) || po.responsavel;
+        saveDB(db);
+        renderAll('OS ' + os + ' — ocorrência resolvida, de volta à caixa.');
+        refreshIfShared('OS ' + os + ' — ocorrência resolvida, de volta à caixa.');
+        return;
+      }
       if (act === 'ver-caixa') {
         var resp = btn.getAttribute('data-resp') || '';
         state.cf.resp = resp ? resp : '__NONE__';
@@ -2056,6 +2177,17 @@
         if (t.value === '' || isNaN(v)) delete cfg.distrib.per[em];
         else cfg.distrib.per[em] = Math.max(0, v);
         saveCfg(cfg);
+        renderDistribuicao();
+      }
+      if (t && t.getAttribute && t.getAttribute('data-dist-auto') !== null) {
+        if (!state.isAdmin) return;
+        var emA = String(t.getAttribute('data-dist-auto') || '').toLowerCase();
+        var cfgA = loadCfg();
+        cfgA.distrib = cfgA.distrib || { enabled: false, qty: 10, per: {}, autoOff: {} };
+        cfgA.distrib.autoOff = cfgA.distrib.autoOff || {};
+        if (t.checked) delete cfgA.distrib.autoOff[emA];
+        else cfgA.distrib.autoOff[emA] = true;
+        saveCfg(cfgA);
         renderDistribuicao();
       }
     });
