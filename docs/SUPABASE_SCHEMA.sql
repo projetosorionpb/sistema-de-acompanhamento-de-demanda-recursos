@@ -1,7 +1,8 @@
 -- ══════════════════════════════════════════════════════════════
 -- Supabase — Sistema de Acompanhamento de Demanda (SIATE × LIST)
--- Espelha o banco local (localStorage sad_db_v1) p/ uso MULTIUSUÁRIO no site.
+-- Banco compartilhado do site (somente nuvem, multiusuário).
 -- Como aplicar: Supabase Dashboard → SQL Editor → New query → colar tudo → Run.
+-- Idempotente: pode rodar de novo sem apagar dados.
 -- ══════════════════════════════════════════════════════════════
 
 -- ── 1. Caixa principal: congruentes + quarentena aprovada ──
@@ -74,7 +75,7 @@ create table if not exists importacoes (
   duplicadas_quarentena int default 0
 );
 
--- ── 5. Perfis (10 usuários + 6 admins — Auth do Supabase é a fonte) ──
+-- ── 5. Perfis (conta e papel — o Auth do Supabase é a fonte) ──
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text unique not null,
@@ -193,9 +194,8 @@ create policy "admin_all_profiles" on profiles
   using (public.is_admin())
   with check (public.is_admin());
 
--- Promover a admin / criar contas: faça no Dashboard
--- Authentication → Users → Add user, depois Table Editor → profiles → role='admin'.
--- (Permitir update de role pelo app exigiria service_role; de propósito só leitura+self aqui.)
+-- Criar contas: pelo site (Acompanhar usuários, admin) ou no Dashboard
+-- Authentication → Users → Add user. Papel vem de profiles.role.
 
 -- ── 7. Configuração do app (compartilhada; ex.: distribuição automática) ──
 create table if not exists config (
