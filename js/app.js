@@ -51,6 +51,7 @@
     if (v === 'acompanhar') renderAcompanhar();
     if (v === 'metricas') renderMetricas();
     if (v === 'distribuir') renderDistribuicao();
+    if (v === 'resumo') { renderStats(); if (!state.isAdmin && $('page-desc')) $('page-desc').textContent = 'Seu desempenho: OS na sua caixa por status e encerradas.'; }
   }
 
   // ---------- utils ----------
@@ -696,6 +697,30 @@
       $('tab-n-p').textContent = mine0 + pool0;
     }
     $('tab-n-q').textContent = db.quarentena.length;
+    renderResumoUser(db);
+  }
+
+  // ---------- resumo pessoal do usuário (quantas OS, por status) ----------
+  function setTxt(id, v) { var e = $(id); if (e) e.textContent = v; }
+  function renderResumoUser(db) {
+    var adminGrid = $('panel-resumo'), userGrid = $('panel-resumo-user');
+    if (!adminGrid || !userGrid) return;
+    if (state.isAdmin) { adminGrid.style.display = ''; userGrid.style.display = 'none'; return; }
+    adminGrid.style.display = 'none'; userGrid.style.display = '';
+    var mine = 0, pool = 0, ini = 0, and = 0, pen = 0, enc = 0, hoje = 0, tk = todayKey();
+    db.principal.forEach(function (p) {
+      if (!p.responsavel) { pool++; return; }
+      if (!isMine(p)) return;
+      mine++;
+      if (p.statusDemanda === 'A INICIAR') ini++;
+      else if (p.statusDemanda === 'EM ANDAMENTO') and++;
+      else if (p.statusDemanda === 'PENDENTE') pen++;
+      else if (p.statusDemanda === 'ENCERRADO') enc++;
+      if (p.encerradoEm && dayKey(p.encerradoEm) === tk) hoje++;
+    });
+    setTxt('ur-total', mine); setTxt('ur-ini', ini); setTxt('ur-and', and);
+    setTxt('ur-pen', pen); setTxt('ur-enc', enc); setTxt('ur-hoje', hoje);
+    setTxt('ur-pool', pool);
   }
 
   // ---------- minha caixa: contadores + métrica do dia (usuário) ----------

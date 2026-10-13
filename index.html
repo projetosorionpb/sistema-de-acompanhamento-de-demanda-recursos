@@ -115,6 +115,7 @@
 
       <!-- ═══ VIEW: RESUMO ═══ -->
       <section id="view-resumo" style="display:none">
+        <!-- Admin: totais da comparação -->
         <div class="stats-grid" id="panel-resumo">
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray"><span data-icon="database" data-size="16"></span></div><div class="stat-label">SIATE válidas</div></div><div class="stat-value" id="st-si">0</div><div class="stat-sub" id="result-msg">—</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray"><span data-icon="clipboard" data-size="16"></span></div><div class="stat-label">LIST válidas</div></div><div class="stat-value" id="st-li">0</div><div class="stat-sub">base gerenciador</div></div>
@@ -123,6 +124,16 @@
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-red"><span data-icon="alert" data-size="16"></span></div><div class="stat-label">Só LIST</div></div><div class="stat-value" id="st-sli" style="color:var(--red)">0</div><div class="stat-sub">→ quarentena</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-blue"><span data-icon="inbox" data-size="16"></span></div><div class="stat-label">No banco · principal</div></div><div class="stat-value" id="st-p">0</div><div class="stat-sub">caixa da equipe</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-accent"><span data-icon="shield" data-size="16"></span></div><div class="stat-label">No banco · quarentena</div></div><div class="stat-value" id="st-q">0</div><div class="stat-sub">aguardando admin</div></div>
+        </div>
+        <!-- Usuário: resumo pessoal -->
+        <div class="stats-grid" id="panel-resumo-user" style="display:none">
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-blue"><span data-icon="inbox" data-size="16"></span></div><div class="stat-label">Na minha caixa</div></div><div class="stat-value" id="ur-total">0</div><div class="stat-sub">OS com você</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray"><span data-icon="clipboard" data-size="16"></span></div><div class="stat-label">A iniciar</div></div><div class="stat-value" id="ur-ini">0</div><div class="stat-sub">ainda não começou</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow"><span data-icon="refresh" data-size="16"></span></div><div class="stat-label">Em andamento</div></div><div class="stat-value" id="ur-and" style="color:var(--yellow)">0</div><div class="stat-sub">trabalhando agora</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-red"><span data-icon="alert" data-size="16"></span></div><div class="stat-label">Em ocorrência</div></div><div class="stat-value" id="ur-pen" style="color:var(--red)">0</div><div class="stat-sub">pendentes</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green"><span data-icon="check-circle" data-size="16"></span></div><div class="stat-label">Encerradas</div></div><div class="stat-value" id="ur-enc" style="color:var(--green)">0</div><div class="stat-sub">total finalizado</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green"><span data-icon="check" data-size="16"></span></div><div class="stat-label">Encerradas hoje</div></div><div class="stat-value" id="ur-hoje" style="color:var(--green)">0</div><div class="stat-sub">finalizadas hoje</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray"><span data-icon="package" data-size="16"></span></div><div class="stat-label">Disponíveis</div></div><div class="stat-value" id="ur-pool">0</div><div class="stat-sub">livres para pegar</div></div>
         </div>
       </section>
 
