@@ -18,6 +18,11 @@ venv/
 # !data/siate/.gitkeep
 # !data/list/.gitkeep
 
+# Bases exemplo grandes - fora do deploy (limite 25MB Cloudflare Workers)
+BASE/
+*.xls
+*.xlsx
+
 # Sistema
 .DS_Store
 Thumbs.db
