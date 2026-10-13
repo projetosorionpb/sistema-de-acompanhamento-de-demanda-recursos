@@ -408,19 +408,24 @@
     var f = u.f;
     var db = loadDB();
     var haveP = {}, haveQ = {}, reprovedSet = {};
-    db.principal.forEach(function (p) { haveP[p.numos] = 1; });
+    db.principal.forEach(function (p) { haveP[p.numos] = p; });
     db.quarentena.forEach(function (q) { haveQ[q.numos + '|' + q.origem] = 1; });
     (db.reproved || []).forEach(function (r) {
       if (r.numos && r.origem) reprovedSet[r.numos + '|' + r.origem] = 1;
     });
 
     var dupToQ = !$('f-dup-quar') || $('f-dup-quar').checked; // repetida → quarentena p/ revisar
-    var newP = 0, keptP = 0, dupQ = 0;
-    var dupKeys = {}; // NUMOS da importação que já estavam na caixa
+    var newP = 0, keptP = 0, closedP = 0, dupQ = 0;
+    var dupKeys = {}; // NUMOS que já estavam na caixa (em aberto) — candidatos a revisão
     cmp.cong.forEach(function (s) {
       if (haveP[s.numos]) {
+        // Já existe no banco: preserva status/responsável. NÃO avança/duplica.
         keptP++;
-        dupKeys[s.numos] = s; // preserva status/responsável; decide abaixo se vai p/ quarentena
+        if (haveP[s.numos].statusDemanda === 'ENCERRADO') {
+          closedP++; // já encerrada: fica como está, sem passar pela quarentena
+        } else {
+          dupKeys[s.numos] = s; // em aberto na caixa: pode ir p/ revisão (JÁ NA CAIXA)
+        }
         return;
       }
       db.principal.push({
@@ -463,7 +468,7 @@
     var newDiv = 0, skipDivRep = 0;
     (cmp.confl || []).forEach(function (pair) {
       var numos = pair.s.numos;
-      if (haveP[numos]) { keptP++; return; } // já na caixa: preserva, sem duplicar
+      if (haveP[numos]) { keptP++; if (haveP[numos].statusDemanda === 'ENCERRADO') closedP++; return; } // já na caixa: preserva, sem duplicar
       var key = numos + '|DIVERGENTE';
       if (haveQ[key]) return;
       if (reprovedSet[key]) { skipDivRep++; return; }
@@ -489,7 +494,7 @@
       db.quarentena.push({ numos: l.numos, origem: 'SO_LIST', d: compactQ(l, 'SO_LIST'), createdAt: new Date().toISOString() });
       newQ++;
     });
-    db.imports.push({ ts: new Date().toISOString(), filtros: f, siateFiltrada: u.siate.length, listFiltrada: u.list.length, congTotal: cmp.cong.length, novasPrincipal: newP, novasQuarentena: newQ, promovidas: promoted, ignoradasReprovadas: skipReproved + skipDivRep, preservadasCaixa: keptP, duplicadasQuarentena: dupQ, dupParaQuarentena: dupToQ, conflitos: (cmp.confl || []).length, novasDivergentes: newDiv });
+    db.imports.push({ ts: new Date().toISOString(), filtros: f, siateFiltrada: u.siate.length, listFiltrada: u.list.length, congTotal: cmp.cong.length, novasPrincipal: newP, novasQuarentena: newQ, promovidas: promoted, ignoradasReprovadas: skipReproved + skipDivRep, preservadasCaixa: keptP, encerradasPreservadas: closedP, duplicadasQuarentena: dupQ, dupParaQuarentena: dupToQ, conflitos: (cmp.confl || []).length, novasDivergentes: newDiv });
     if (!saveDB(db)) {
       var kb = 0;
       try { kb = Math.round(JSON.stringify(db).length / 1024); } catch (e) {}
@@ -507,7 +512,7 @@
         if (dl) dl.textContent = new Date().toLocaleString('pt-BR') + ' — pós-importação: ' + distSummary(dd) + '.';
       }
     } catch (e5) {}
-    renderAll('Banco atualizado (incremental, nada apagado): +' + newP + ' na caixa, +' + newQ + ' na quarentena, +' + newDiv + ' conflito(s) p/ revisar, ' + keptP + ' da caixa preservadas' + (dupToQ ? ', ' + dupQ + ' repetida(s) → quarentena (JÁ NA CAIXA)' : ', repetidas só ignoradas') + ', ' + promoted + ' promovidas da quarentena' + ((skipReproved + skipDivRep) ? ', ' + (skipReproved + skipDivRep) + ' reprovadas ignoradas' : '') + distMsg + '.');
+    renderAll('Banco atualizado (incremental, nada apagado): +' + newP + ' novos na caixa, +' + newQ + ' na quarentena, +' + newDiv + ' conflito(s) p/ revisar · ' + closedP + ' já encerradas mantidas, ' + (keptP - closedP) + ' abertas preservadas' + (dupToQ ? ', ' + dupQ + ' repetida(s) → quarentena (JÁ NA CAIXA)' : '') + ', ' + promoted + ' promovidas da quarentena' + ((skipReproved + skipDivRep) ? ', ' + (skipReproved + skipDivRep) + ' reprovadas ignoradas' : '') + distMsg + '.');
   }
 
   // ---------- render ----------
