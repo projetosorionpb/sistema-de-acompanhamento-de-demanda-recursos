@@ -125,7 +125,12 @@
   function todayKey() { return dayKey(new Date().toISOString()); }
 
   // ---------- DB ----------
+  // Online (Supabase): cache compartilhado em memória (js/db.js).
+  // Local: localStorage sad_db_v1.
   function loadDB() {
+    if (window.SADDB) {
+      try { return SADDB.load(); } catch (e) {}
+    }
     try {
       var d = JSON.parse(localStorage.getItem(DB_KEY) || 'null');
       if (d && d.principal && d.quarentena) return d;
@@ -133,8 +138,20 @@
     return { principal: [], quarentena: [], imports: [], reproved: [] };
   }
   function saveDB(db) {
+    if (window.SADDB) {
+      try { return SADDB.save(db); } catch (e) {}
+    }
     try { localStorage.setItem(DB_KEY, JSON.stringify(db)); return true; }
     catch (e) { return false; } // quota excedida (~5MB) — pushToDB avisa
+  }
+  // Quando o banco é compartilhado, re-busca o servidor após ações que afetam
+  // outros usuários (pegar/liberar/trocar status) para ver a caixa atualizada.
+  function refreshIfShared(msg) {
+    try {
+      if (window.SADDB && SADDB.enabled()) {
+        SADDB.refresh().then(function () { renderAll(msg); });
+      }
+    } catch (e) {}
   }
 
   // ---------- quarentena compacta (cabe na quota do localStorage) ----------
@@ -215,8 +232,9 @@
 
     var log = [];
     if (!cNumos) log.push('AVISO: coluna NUMOS não encontrada. Headers: ' + headers.slice(0, 12).join(' | '));
-    var clean = [], seen = {}, dups = 0, empty = 0;
+    var clean = [], seen = {}, dups = 0, empty = 0, bad = 0;
     rows.forEach(function (r, i) {
+      if (!r || typeof r !== 'object') { bad++; return; }
       var numos = normOS(cNumos ? r[cNumos] : '');
       if (!numos) { empty++; return; }
       if (seen[numos]) { dups++; return; }
@@ -238,7 +256,7 @@
         dscsvc: normText(cDsc ? r[cDsc] : '', false).slice(0, 200),
       });
     });
-    log.push('SIATE: ' + rows.length + ' linhas lidas → ' + clean.length + ' válidas (' + empty + ' sem NUMOS, ' + dups + ' duplicadas removidas).');
+    log.push('SIATE: ' + rows.length + ' linhas lidas → ' + clean.length + ' válidas (' + empty + ' sem NUMOS, ' + dups + ' duplicadas removidas' + (bad ? ', ' + bad + ' linhas inválidas' : '') + ').');
     return { clean: clean, log: log };
   }
 
@@ -253,8 +271,9 @@
     var cSol = findCol(headers, ['solicitacao']);
     var cStatus = findCol(headers, ['status']);
     var cTel = findCol(headers, ['telefonecliente', 'telefone']);
-    var clean = [], seen = {}, dups = 0, empty = 0;
+    var clean = [], seen = {}, dups = 0, empty = 0, bad = 0;
     rows.forEach(function (r) {
+      if (!r || typeof r !== 'object') { bad++; return; }
       var os = normOS(cOS ? r[cOS] : '');
       if (!os) { empty++; return; }
       if (seen[os]) { dups++; return; }
@@ -270,7 +289,7 @@
         telefone: normPhone(cTel ? r[cTel] : ''),
       });
     });
-    return { clean: clean, log: ['LIST: ' + rows.length + ' linhas lidas → ' + clean.length + ' válidas (' + empty + ' sem OS, ' + dups + ' duplicadas removidas).'] };
+    return { clean: clean, log: ['LIST: ' + rows.length + ' linhas lidas → ' + clean.length + ' válidas (' + empty + ' sem OS, ' + dups + ' duplicadas removidas' + (bad ? ', ' + bad + ' linhas inválidas' : '') + ').'] };
   }
 
   // ---------- comparação ----------
@@ -1360,7 +1379,10 @@
         '</td></tr>';
     });
     el.innerHTML = h + '</tbody></table></div>' +
-      '<div class="panel-hint">Total: ' + users.length + ' conta(s) neste navegador. Para valer no site p/ todos (multiusuário real), configure o Supabase — ver docs/DEPLOY_SUPABASE.md e js/config.js.</div>';
+      '<div class="panel-hint">Total: ' + users.length + ' conta(s).' +
+      (window.SADDB && SADDB.enabled()
+        ? ' Online (Supabase): contas e papéis são gerenciados em Authentication → Users e Table Editor → profiles.'
+        : ' Neste navegador. Configure o Supabase (docs/DEPLOY_SUPABASE.md) p/ valer no site todo.') + '</div>';
   }
 
   function renderAll(msg) {
@@ -1580,6 +1602,7 @@
           if (p.statusDemanda === 'A INICIAR') p.statusDemanda = 'EM ANDAMENTO';
           p.encerradoEm = null; p.encerradoPor = null;
           saveDB(db); renderAll('OS ' + os + ' na sua caixa. Bom trabalho! 🙋');
+          refreshIfShared('OS ' + os + ' na sua caixa. Bom trabalho! 🙋');
         }
       }
       if (act === 'liberar') {
@@ -1598,6 +1621,7 @@
             } catch (e7) {}
           }
           renderAll('OS ' + os + ' devolvida aos disponíveis.' + refill2);
+          refreshIfShared('OS ' + os + ' devolvida aos disponíveis.' + refill2);
         }
       }
       if (act === 'ver-caixa') {
@@ -1692,6 +1716,7 @@
           } catch (e6) {}
         }
         renderAll('OS ' + os + ' → ' + s.value + '.' + refill);
+        refreshIfShared('OS ' + os + ' → ' + s.value + '.' + refill);
       }
     });
 
@@ -1774,10 +1799,18 @@
     });
     var bc = $('btn-clear');
     if (bc) bc.addEventListener('click', function () {
-      if (!confirm('Limpar banco local (caixa + quarentena)?')) return;
-      localStorage.removeItem(DB_KEY); state.result = null; state.siateClean = []; state.listClean = [];
-      $('log').textContent = 'Banco local limpo.';
-      renderAll('Banco limpo.');
+      var shared = false;
+      try { shared = !!(window.SADDB && SADDB.enabled()); } catch (e) {}
+      if (shared) {
+        if (!confirm('ATENÇÃO: o banco é COMPARTILHADO. Limpar apaga a caixa + quarentena de TODOS os usuários.')) return;
+        if (!confirm('Confirma mesmo? Essa ação afeta todos.')) return;
+      } else {
+        if (!confirm('Limpar banco local (caixa + quarentena)?')) return;
+      }
+      saveDB({ principal: [], quarentena: [], imports: [], reproved: [] });
+      state.result = null; state.siateClean = []; state.listClean = [];
+      $('log').textContent = shared ? 'Banco compartilhado limpo (todos).' : 'Banco local limpo.';
+      renderAll(shared ? 'Banco compartilhado limpo para todos.' : 'Banco limpo.');
     });
   }
 
@@ -1962,6 +1995,22 @@
     if (!sess) return;
     state.user = sess;
     state.isAdmin = isAdminEmail(sess.email);
+    // Carrega o banco compartilhado (Supabase) se configurado; senão, local.
+    var dbMode = 'local';
+    try { if (window.SADDB) dbMode = await SADDB.init(); } catch (e0) {}
+    state.dbMode = dbMode;
+    try {
+      var tb = document.querySelector('.topbar-right');
+      if (tb) {
+        var modeBadge = document.createElement('span');
+        modeBadge.className = 'badge ' + (dbMode === 'supabase' ? 'badge-green' : 'badge-gray');
+        modeBadge.textContent = dbMode === 'supabase' ? '☁ Compartilhado' : '💾 Local';
+        modeBadge.title = dbMode === 'supabase'
+          ? 'Banco no Supabase: todos os usuários veem a mesma caixa.'
+          : 'Banco só neste navegador (localStorage). Configure o Supabase p/ compartilhar.';
+        tb.insertBefore(modeBadge, tb.firstChild);
+      }
+    } catch (eM) {}
     var role = sess.role || (state.isAdmin ? 'admin' : 'usuario');
     $('me').textContent = sess.email;
     if ($('role')) $('role').textContent = role;

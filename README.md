@@ -44,21 +44,25 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 - **Distribuição automática (admin):** tela **🚚 Distribuição** — ativa/desativa, cota padrão igual p/ todos + cota individual por usuário (0 pula). Quem zera as abertas recebe sozinho (mais antigas primeiro): no login, na importação, ao encerrar a última e ao liberar. Admins não recebem.
 - **Ordenação da caixa:** select + clique no cabeçalho **NUM OS / DATA SOL** (mais antigas ↔ mais novas) — ideal p/ importação diária.
 - **Multiusuário:** admin cria contas em **Acompanhar usuários** (local `sad_users_v1`); banco compartilhado no site via **Supabase** — ver `docs/DEPLOY_SUPABASE.md` + `js/config.js` (enquanto vazio, roda local).
+- **Banco compartilhado (Supabase):** com `js/config.js` preenchido, login e dados usam a nuvem — todos veem a mesma caixa/quarentena. A camada `js/db.js` carrega em cache e grava por diff (INSERT/UPDATE/DELETE); sem Supabase, cai no `localStorage` sem regressão. O topo mostra **☁ Compartilhado** ou **💾 Local**.
 
 ## Estrutura
 
 ```
 ├── index.html          # app (upload, filtros, resumo, caixa, quarentena)
-├── login.html          # login demo
+├── login.html          # login (Supabase Auth + demos locais)
 ├── css/style.css       # identidade (mesmas vars do carregamentoepdpb)
 ├── js/theme.js         # dark/light (key sad-theme)
-├── js/auth.js          # multiusuário local sad_users_v1 (plugável Supabase Auth)
+├── js/auth.js          # login híbrido: Supabase Auth ou local (sad_users_v1)
+├── js/db.js            # camada de dados: Supabase (compartilhado) ou localStorage
 ├── js/config.js        # SUPABASE_URL + ANON_KEY (vazio = modo local)
-├── js/app.js           # parse SheetJS, sanitiza, compara NUMOS, banco localStorage
-├── BASE/               # bases de exemplo (do remoto)
+├── js/app.js           # parse SheetJS, sanitiza, compara NUMOS, caixa, quarentena
+├── BASE/               # bases de exemplo (locais; fora do Git/deploy)
 ├── docs/BRIEFING.md
-├── docs/SUPABASE_SCHEMA.sql  # tabelas futuras
+├── docs/SUPABASE_SCHEMA.sql  # tabelas produtivas
 └── data/               # (legado) usar BASE/
 ```
 
-Banco atual: `localStorage sad_db_v1`. Schema produtivo em `docs/SUPABASE_SCHEMA.sql` + passo a passo em `docs/DEPLOY_SUPABASE.md`.
+Banco: **Supabase** quando `js/config.js` está preenchido (todos veem a mesma
+caixa); senão `localStorage sad_db_v1` (por navegador). Schema em
+`docs/SUPABASE_SCHEMA.sql` + passo a passo em `docs/DEPLOY_SUPABASE.md`.

@@ -93,14 +93,20 @@ a config já vai no `js/config.js`.
 
 ## 7. Camada de código (onde plugar)
 
-- `js/config.js` — URL + anon key.
-- `js/auth.js` — hoje local (`sad_users_v1`); com Supabase, trocar
-  `signIn/requireAuth/isAdminEmail` por `supabase-js` Auth + leitura de
-  `profiles.role` (o schema e as policies já estão prontos).
-- `js/app.js` — `loadDB/saveDB` hoje falam com `localStorage`; a troca é
-  ler/gravar em `demandas/quarentena/reprovadas/importacoes` com paginação
-  (o formato dos objetos já é 1:1 com as colunas).
-- Quota local (~5 MB) deixa de ser problema após migrar.
+- `js/config.js` — URL + anon key (vazio = modo local).
+- `js/auth.js` — login híbrido: Supabase Auth (nuvem) com fallback para os
+  demos locais (`admin@sistema` / `equipe@sistema`); papel vem de `profiles.role`.
+- `js/db.js` **camada de dados (feito)**: quando há Supabase + sessão, carrega
+  as tabelas para um cache em memória e grava por *diff* (INSERT de novas,
+  UPDATE das alteradas, DELETE das removidas). Sem Supabase, cai no
+  `localStorage` como antes — mesmo comportamento, zero regressão.
+  - `demandas`: admin insere (importação); usuário faz UPDATE só na própria
+    caixa/disponível (respeita o RLS).
+  - `quarentena`/`reprovadas`/`importacoes`: só admin grava (RLS).
+- `js/app.js` — `loadDB/saveDB` agora falam com `window.SADDB`; após pegar,
+  liberar ou encerrar, quem usa banco compartilhado re-busca do servidor
+  (`refreshIfShared`) para ver a caixa atualizada.
+- O topo do app mostra **☁ Compartilhado** (Supabase ativo) ou **💾 Local**.
 
 ## 8. Checklist de aceite
 
