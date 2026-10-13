@@ -4,6 +4,6 @@
 // 3) Copie Project URL + anon key para cá
 // Enquanto estiver vazio, o app roda em modo LOCAL (localStorage, por navegador).
 var SAD_CONFIG = {
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: ""
+  SUPABASE_URL: "https://qvefbyhotjgfmyplkdop.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2ZWZieWhvdGpnZm15cGxrZG9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4OTg0MDYsImV4cCI6MjEwNzQ3NDQwNn0.YZW9jSFlzi2C_Q_I_wVtUvw2KICbIFPdKDkmF40H8xA"
 };
