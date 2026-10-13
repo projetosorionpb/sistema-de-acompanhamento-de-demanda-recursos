@@ -6,7 +6,7 @@
 
   var PAGE_SIZE = 50;
   var REGIONAL_NOME = { 1: 'LESTE', 2: 'CENTRO', 3: 'OESTE' };
-  var STATUS_LIST = ['A INICIAR', 'EM ANDAMENTO', 'PENDENTE', 'ENCERRADO'];
+  var STATUS_LIST = ['A INICIAR', 'EM ANDAMENTO', 'OCORRENCIA', 'ENCERRADO'];
 
   var state = {
     siateRaw: [], siateClean: [], listRaw: [], listClean: [],
@@ -15,16 +15,18 @@
     cf: { reg: '', codserv: '', cidade: '', dini: '', dfim: '', resp: '' }, // filtros da caixa
     metrics: { preset: 'hoje', dini: '', dfim: '', user: '' }, // métricas do admin
     resumo: { preset: 'hoje', dini: '', dfim: '' }, // período do resumo do usuário
+    encSearch: '', // busca da tela Encerrados
     scope: 'mine', // usuário: 'mine' (minha caixa) | 'pool' (disponíveis); admin vê tudo
     sort: { key: 'data-desc' }, // data-desc | data-asc | os-desc | os-asc (clicável no th + select)
     qf: { origem: '', codserv: '' }, // filtros da quarentena
-    pagePrincipal: 1, pageQuar: 1,
+    pagePrincipal: 1, pageQuar: 1, pageEnc: 1,
     isAdmin: false, user: null,
     codservOptions: [],
   };
 
   var VIEW_TITLES = {
-    caixa: ['Caixa principal', 'Demandas congruentes (nas duas bases) prontas para a equipe assumir.'],
+    caixa: ['Caixa principal', 'Demandas em aberto (a iniciar, em andamento ou ocorrência) para a equipe trabalhar.'],
+    encerrados: ['Encerrados', 'OS concluídas — saíram da caixa e ficam aqui para consulta.'],
     quarentena: ['Quarentena', 'Divergências: tem em uma base e não tem na outra. O admin aprova ou reprova.'],
     importar: ['Importar bases', 'Suba as duas bases (admin), ajuste os filtros e jogue no banco.'],
     distribuir: ['Distribuição', 'Cota automática de OS por usuário: quem zera recebe sozinho.'],
@@ -37,7 +39,7 @@
   function showView(v) {
     if (ADMIN_VIEWS.indexOf(v) !== -1 && !state.isAdmin) v = 'caixa';
     state.view = v;
-    var map = { caixa: 'view-principal', quarentena: 'view-quarentena', importar: 'view-importar', resumo: 'view-resumo', acompanhar: 'view-acompanhar', metricas: 'view-metricas', distribuir: 'view-distribuir' };
+    var map = { caixa: 'view-principal', encerrados: 'view-encerrados', quarentena: 'view-quarentena', importar: 'view-importar', resumo: 'view-resumo', acompanhar: 'view-acompanhar', metricas: 'view-metricas', distribuir: 'view-distribuir' };
     Object.keys(map).forEach(function (k) {
       var el = $(map[k]);
       if (el) el.style.display = (k === v) ? '' : 'none';
@@ -52,6 +54,7 @@
     if (v === 'acompanhar') renderAcompanhar();
     if (v === 'metricas') renderMetricas();
     if (v === 'distribuir') renderDistribuicao();
+    if (v === 'encerrados') renderEncerrados();
     if (v === 'resumo') { renderStats(); if (!state.isAdmin && $('page-desc')) $('page-desc').textContent = 'Seu desempenho: OS na sua caixa por status e encerradas.'; }
   }
 
@@ -512,9 +515,10 @@
     var cls = 'badge-gray';
     if (st === 'A INICIAR') cls = 'badge-blue';
     else if (st === 'EM ANDAMENTO') cls = 'badge-yellow';
-    else if (st === 'PENDENTE') cls = 'badge-red';
+    else if (st === 'OCORRENCIA') cls = 'badge-red';
     else if (st === 'ENCERRADO') cls = 'badge-green';
-    return '<span class="badge ' + cls + '">' + esc(st) + '</span>';
+    var label = st === 'OCORRENCIA' ? 'OCORRÊNCIA' : st;
+    return '<span class="badge ' + cls + '">' + esc(label) + '</span>';
   }
   function regionalBadge(r) {
     return '<span class="badge badge-gray">' + esc(r || '—') + '</span>';
@@ -527,6 +531,7 @@
     // (Admin vê tudo; quarentena/acompanhar já são só-admin.)
     var scope = state.isAdmin ? 'all' : (state.scope || 'mine');
     var out = db.principal.filter(function (p) {
+      if (p.statusDemanda === 'ENCERRADO') return false; // encerradas ficam na tela "Encerrados"
       if (scope === 'mine' && !isMine(p)) return false;
       if (scope === 'pool' && p.responsavel) return false;
       if (state.statusFilter !== 'TODOS' && p.statusDemanda !== state.statusFilter) return false;
@@ -582,6 +587,61 @@
     if (col === 'data' && (k === 'data-asc' || k === 'data-desc')) return ' <span class="sort-ico on">' + SADICON(k === 'data-asc' ? 'arrow-up' : 'arrow-down', 13) + '</span>';
     if (col === 'os' && (k === 'os-asc' || k === 'os-desc')) return ' <span class="sort-ico on">' + SADICON(k === 'os-asc' ? 'arrow-up' : 'arrow-down', 13) + '</span>';
     return ' <span class="sort-ico">' + SADICON('sort', 13) + '</span>';
+  }
+
+  // ---------- Encerrados (OS concluídas saem da caixa) ----------
+  function filteredEncerrados(db) {
+    var q = String(state.encSearch || '').trim().toUpperCase();
+    var out = db.principal.filter(function (p) {
+      if (p.statusDemanda !== 'ENCERRADO') return false;
+      if (!state.isAdmin && !isMine(p)) return false;
+      if (!q) return true;
+      return String(p.numos).indexOf(q) !== -1 ||
+        String(p.cliente || '').toUpperCase().indexOf(q) !== -1 ||
+        String(p.cidade || '').toUpperCase().indexOf(q) !== -1 ||
+        String(p.codserv || '').indexOf(q) !== -1 ||
+        String(p.responsavel || '').toUpperCase().indexOf(q) !== -1;
+    });
+    return sortPrincipal(out, state.sort.key);
+  }
+  function renderEncerrados(msg) {
+    var el = $('tbl-encerrados');
+    if (!el) return;
+    var db = loadDB();
+    var list = filteredEncerrados(db);
+    var totalP = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    if (state.pageEnc > totalP) state.pageEnc = totalP;
+    var slice = list.slice((state.pageEnc - 1) * PAGE_SIZE, state.pageEnc * PAGE_SIZE);
+    var html = '';
+    if (!slice.length) {
+      html = '<div class="no-results"><div class="big">' + SADICON('check-circle', 38) + '</div>Nenhuma OS encerrada' + (String(state.encSearch || '').trim() ? ' para essa busca.' : '.') + '</div>';
+    } else {
+      html = '<div class="table-wrap"><table><thead><tr>' +
+        '<th data-sort="os" title="Ordenar por NUM OS" style="cursor:pointer;user-select:none">NUM OS' + sortArrow('os') + '</th>' +
+        '<th>CODSERV</th>' +
+        '<th data-sort="data" title="Ordenar por DATA SOL" style="cursor:pointer;user-select:none">DATA SOL' + sortArrow('data') + '</th>' +
+        '<th>CIDADE</th><th>CLIENTE</th>' +
+        (state.isAdmin ? '<th>RESPONSÁVEL</th>' : '') +
+        '<th>ENCERRADO EM</th></tr></thead><tbody>';
+      slice.forEach(function (p) {
+        html += '<tr>' +
+          '<td><span class="os-id">' + esc(p.numos) + '</span></td>' +
+          '<td class="mono">' + esc(p.codserv || '—') + '</td>' +
+          '<td class="mono">' + esc(p.dataISO || p.datasol || '—') + '</td>' +
+          '<td>' + esc(p.cidade || '—') + '</td>' +
+          '<td>' + esc(p.cliente || '—') + '</td>' +
+          (state.isAdmin ? '<td class="mono">' + esc(p.responsavel || '—') + '</td>' : '') +
+          '<td class="mono">' + esc(p.encerradoEm ? String(p.encerradoEm).slice(0, 10) : '—') + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table></div>';
+      html += '<div class="pagination"><button class="page-btn" data-pg="e-prev">‹</button>' +
+        '<span class="page-info">Pág ' + state.pageEnc + '/' + totalP + ' • ' + list.length + ' itens</span>' +
+        '<button class="page-btn" data-pg="e-next">›</button></div>';
+    }
+    el.innerHTML = html;
+    var enc = $('enc-count');
+    if (enc) enc.textContent = list.length + ' encerrada(s)';
   }
   function filteredQuar(db) {
     var q = state.search.trim().toUpperCase();
@@ -688,12 +748,17 @@
     $('st-p').textContent = db.principal.length;
     $('st-q').textContent = db.quarentena.length;
     if (state.isAdmin) {
-      $('count-badge').textContent = db.principal.length + ' na caixa • ' + db.quarentena.length + ' quarentena';
-      $('tab-n-p').textContent = db.principal.length;
+      var openT = 0, encT = 0;
+      db.principal.forEach(function (p) { if (p.statusDemanda === 'ENCERRADO') encT++; else openT++; });
+      $('count-badge').textContent = openT + ' na caixa • ' + encT + ' encerradas • ' + db.quarentena.length + ' quarentena';
+      $('tab-n-p').textContent = openT;
     } else {
       // Usuário não vê nem a quantidade dos outros: só minhas + disponíveis.
       var mine0 = 0, pool0 = 0;
-      db.principal.forEach(function (p) { if (isMine(p)) mine0++; else if (!p.responsavel) pool0++; });
+      db.principal.forEach(function (p) {
+        if (p.statusDemanda === 'ENCERRADO') return;
+        if (isMine(p)) mine0++; else if (!p.responsavel) pool0++;
+      });
       $('count-badge').textContent = mine0 + ' minhas • ' + pool0 + ' disponíveis';
       $('tab-n-p').textContent = mine0 + pool0;
     }
@@ -727,11 +792,18 @@
     db.principal.forEach(function (p) {
       if (!p.responsavel) { pool++; return; }
       if (!isMine(p)) return;
+      if (p.statusDemanda === 'ENCERRADO') {
+        enc++;
+        if (p.encerradoEm) {
+          var dk0 = dayKey(p.encerradoEm);
+          if (dk0 && dk0 >= r.ini && dk0 <= r.fim) encPer++;
+        }
+        return;
+      }
       mine++;
       if (p.statusDemanda === 'A INICIAR') ini++;
       else if (p.statusDemanda === 'EM ANDAMENTO') and++;
-      else if (p.statusDemanda === 'PENDENTE') pen++;
-      else if (p.statusDemanda === 'ENCERRADO') enc++;
+      else if (p.statusDemanda === 'OCORRENCIA') pen++;
       if (p.encerradoEm) {
         var dk = dayKey(p.encerradoEm);
         if (dk && dk >= r.ini && dk <= r.fim) encPer++;
@@ -764,8 +836,11 @@
     db.principal.forEach(function (p) {
       if (!p.responsavel) { pool++; return; }
       if (!isMine(p)) return;
+      if (p.statusDemanda === 'ENCERRADO') {
+        if (p.encerradoEm && dayKey(p.encerradoEm) === tk) hoje++;
+        return;
+      }
       mine++;
-      if (p.encerradoEm && dayKey(p.encerradoEm) === tk) hoje++;
     });
     el.innerHTML =
       '<span class="mi">' + SADICON('user', 15) + '<b>' + mine + '</b> na minha caixa</span>' +
@@ -804,13 +879,15 @@
           '<td>' + esc(p.cidade || '—') + '</td>' +
           '<td>' + esc(p.cliente || '—') + '</td>' +
           '<td class="mono">' + esc(p.tel1 || p.telefone || '—') + '</td>' +
-          '<td>' + statusBadge(p.statusDemanda) + '<br><select class="status-select" data-act="status" data-os="' + esc(p.numos) + '" style="margin-top:6px">' +
+          '<td>' + statusBadge(p.statusDemanda) +
+          (p.statusDemanda === 'OCORRENCIA' && p.motivoOcorrencia ? '<div class="oc-motivo" title="' + esc(p.motivoOcorrencia) + '">' + esc(p.motivoOcorrencia) + '</div>' : '') +
+          '<select class="status-select" data-act="status" data-os="' + esc(p.numos) + '" style="margin-top:6px">' +
           STATUS_LIST.map(function (s) { return '<option value="' + s + '"' + (s === p.statusDemanda ? ' selected' : '') + '>' + s + '</option>'; }).join('') +
           '</select></td>' +
           '<td class="mono">' + esc(p.responsavel || '—') + '</td>' +
           '<td style="white-space:nowrap">' +
           (p.responsavel ? '' : '<button class="btn-small" data-act="pegar" data-os="' + esc(p.numos) + '">Pegar</button> ') +
-          '<button class="btn-small danger" data-act="liberar" data-os="' + esc(p.numos) + '">Liberar</button>' +
+          (state.isAdmin ? '<button class="btn-small danger" data-act="liberar" data-os="' + esc(p.numos) + '">Liberar</button>' : '') +
           '</td></tr>';
       });
       html += '</tbody></table></div>';
@@ -999,7 +1076,7 @@
       g.total++;
       if (p.statusDemanda === 'A INICIAR') g.ini++;
       else if (p.statusDemanda === 'EM ANDAMENTO') g.and++;
-      else if (p.statusDemanda === 'PENDENTE') g.pen++;
+      else if (p.statusDemanda === 'OCORRENCIA') g.pen++;
       else if (p.statusDemanda === 'ENCERRADO') g.enc++;
       else g.maos++;
       // Métrica do dia: encerrada hoje por essa pessoa (crédito = quem encerrou).
@@ -1018,7 +1095,7 @@
       return;
     }
     var h = '<div class="table-wrap"><table><thead><tr>' +
-      '<th>Pessoa</th><th>Total</th><th>Hoje</th><th>Em mãos</th><th>A iniciar</th><th>Em andamento</th><th>Pendente</th><th>Encerrado</th><th>OS (amostra)</th><th></th>' +
+      '<th>Pessoa</th><th>Total</th><th>Hoje</th><th>Em mãos</th><th>A iniciar</th><th>Em andamento</th><th>Ocorrência</th><th>Encerrado</th><th>OS (amostra)</th><th></th>' +
       '</tr></thead><tbody>';
     order.forEach(function (k) {
       var g = groups[k];
@@ -1212,7 +1289,7 @@
     var db = loadDB();
     var em = String(email || '').toLowerCase();
     var list = db.principal.filter(function (p) { return String(p.responsavel || '').toLowerCase() === em; });
-    var map = { 'A INICIAR': 0, 'EM ANDAMENTO': 0, 'PENDENTE': 0, 'ENCERRADO': 0 };
+    var map = { 'A INICIAR': 0, 'EM ANDAMENTO': 0, 'OCORRENCIA': 0, 'ENCERRADO': 0 };
     list.forEach(function (p) { if (map[p.statusDemanda] !== undefined) map[p.statusDemanda]++; });
     var user = (typeof getUsers === 'function' ? getUsers() : []).filter(function (u) { return String(u.email).toLowerCase() === em; })[0];
     if (title) title.textContent = 'OS de ' + (user ? user.email : (email || '—')) + ' — ' + list.length + ' na caixa';
@@ -1226,21 +1303,22 @@
         chip('TODOS', 'Todos', list.length) +
         chip('A INICIAR', 'A iniciar', map['A INICIAR']) +
         chip('EM ANDAMENTO', 'Em andamento', map['EM ANDAMENTO']) +
-        chip('PENDENTE', 'Em ocorrência', map['PENDENTE']) +
+        chip('OCORRENCIA', 'Em ocorrência', map['OCORRENCIA']) +
         chip('ENCERRADO', 'Encerrado', map['ENCERRADO']) +
         '</div>';
       if (!rows.length) {
         html += '<div class="no-results">Nenhuma OS nesse filtro.</div>';
       } else {
         html += '<div class="table-wrap"><table style="min-width:0"><thead><tr>' +
-          '<th>NUM OS</th><th>CODSERV</th><th>CIDADE</th><th>DATA SOL</th><th>STATUS</th>' +
+          '<th>NUM OS</th><th>CODSERV</th><th>CIDADE</th><th>DATA SOL</th><th>STATUS</th><th>MOTIVO</th>' +
           '</tr></thead><tbody>';
         rows.forEach(function (p) {
           html += '<tr><td><span class="os-id">' + esc(p.numos) + '</span></td>' +
             '<td class="mono">' + esc(p.codserv || '—') + '</td>' +
             '<td>' + esc(p.cidade || '—') + '</td>' +
             '<td class="mono">' + esc(p.dataISO || p.datasol || '—') + '</td>' +
-            '<td>' + statusBadge(p.statusDemanda) + '</td></tr>';
+            '<td>' + statusBadge(p.statusDemanda) + '</td>' +
+            '<td style="font-size:12px;max-width:280px">' + esc(p.motivoOcorrencia || '—') + '</td></tr>';
         });
         html += '</tbody></table></div><div class="panel-hint">' + rows.length + ' OS listada(s).</div>';
       }
@@ -1253,6 +1331,38 @@
     ov.style.display = 'flex';
   }
   function closeUserOS() { var ov = $('modal-user'); if (ov) ov.style.display = 'none'; }
+
+  // ---------- modal de ocorrência (motivo obrigatório) ----------
+  var _ocCtx = null;
+  function openOcorrenciaModal(os, current, onOk, onCancel) {
+    var ov = $('modal-ocorrencia');
+    if (!ov) { if (onOk) onOk(current || ''); return; }
+    _ocCtx = { os: os, onOk: onOk, onCancel: onCancel };
+    var lbl = $('oc-os-label'); if (lbl) lbl.textContent = 'OS ' + os;
+    var ta = $('oc-motivo'); if (ta) ta.value = current || '';
+    var err = $('oc-err'); if (err) { err.style.display = 'none'; err.textContent = ''; }
+    ov.style.display = 'flex';
+    if (ta) setTimeout(function () { ta.focus(); }, 30);
+  }
+  function closeOcorrenciaModal(cancelled) {
+    var ctx = _ocCtx;
+    if (!ctx) return;
+    if (cancelled) {
+      _ocCtx = null;
+      var o = $('modal-ocorrencia'); if (o) o.style.display = 'none';
+      if (ctx.onCancel) ctx.onCancel();
+      return;
+    }
+    var motivo = ((($('oc-motivo') || {}).value) || '').trim();
+    if (motivo.length < 3) {
+      var err = $('oc-err');
+      if (err) { err.textContent = 'Informe o motivo (mínimo 3 caracteres).'; err.style.display = ''; }
+      return;
+    }
+    _ocCtx = null;
+    var ov = $('modal-ocorrencia'); if (ov) ov.style.display = 'none';
+    if (ctx.onOk) ctx.onOk(motivo);
+  }
 
   // ---------- distribuição automática (admin configura, sistema entrega) ----------
   // Config compartilhada na nuvem (tabela `config`), via js/db.js.
@@ -1492,6 +1602,7 @@
     populateCaixaFilters(db);
     populateQuarFilters(db);
     renderTables(msg);
+    renderEncerrados();
     if (state.isAdmin) {
       var sr = $('scope-row');
       if (sr) sr.style.display = 'none';
@@ -1657,6 +1768,18 @@
     if (muo) muo.addEventListener('click', closeUserOS);
     var muov = $('modal-user');
     if (muov) muov.addEventListener('click', function (e) { if (e.target === muov) closeUserOS(); });
+    var ocOk = $('oc-ok');
+    if (ocOk) ocOk.addEventListener('click', function () { closeOcorrenciaModal(false); });
+    var ocCancel = $('oc-cancel');
+    if (ocCancel) ocCancel.addEventListener('click', function () { closeOcorrenciaModal(true); });
+    var ocOv = $('modal-ocorrencia');
+    if (ocOv) ocOv.addEventListener('click', function (e) { if (e.target === ocOv) closeOcorrenciaModal(true); });
+    // busca da tela Encerrados
+    var qe = $('q-enc');
+    if (qe) {
+      qe.addEventListener('input', function () { state.encSearch = qe.value || ''; state.pageEnc = 1; renderEncerrados(); });
+      qe.addEventListener('keydown', function (e) { if (e.key === 'Enter') { state.encSearch = qe.value || ''; state.pageEnc = 1; renderEncerrados(); } });
+    }
 
     var ex1 = $('btn-exp-csv');
     if (ex1) ex1.addEventListener('click', exportQuarCSV);
@@ -1719,6 +1842,8 @@
       if (pg === 'p-next') { state.pagePrincipal++; renderAll(); }
       if (pg === 'q-prev' && state.pageQuar > 1) { state.pageQuar--; renderAll(); }
       if (pg === 'q-next') { state.pageQuar++; renderAll(); }
+      if (pg === 'e-prev' && state.pageEnc > 1) { state.pageEnc--; renderEncerrados(); }
+      if (pg === 'e-next') { state.pageEnc++; renderEncerrados(); }
 
       var btn = e.target.closest ? e.target.closest('[data-act]') : null;
       if (!btn) return;
@@ -1819,11 +1944,14 @@
       var os = s.getAttribute('data-os');
       var db = loadDB();
       var p = db.principal.find(function (x) { return x.numos === os; });
-      if (p && STATUS_LIST.indexOf(s.value) !== -1) {
-        if (!state.isAdmin && p.responsavel && !isMine(p)) { alert('Essa OS está com outro usuário.'); renderAll(); return; }
-        p.statusDemanda = s.value;
+      if (!p || STATUS_LIST.indexOf(s.value) === -1) return;
+      if (!state.isAdmin && p.responsavel && !isMine(p)) { alert('Essa OS está com outro usuário.'); renderAll(); return; }
+      var novo = s.value;
+      function aplicar(motivo) {
+        p.statusDemanda = novo;
+        p.motivoOcorrencia = (novo === 'OCORRENCIA') ? (motivo || '') : '';
         var credit = '';
-        if (s.value === 'ENCERRADO') {
+        if (novo === 'ENCERRADO') {
           p.encerradoEm = new Date().toISOString();
           p.encerradoPor = p.responsavel || ((state.user && state.user.email) || '');
           credit = p.encerradoPor;
@@ -1831,7 +1959,6 @@
           p.encerradoEm = null; p.encerradoPor = null;
         }
         saveDB(db);
-        // Zerou as abertas? A distribuição automática recarrega a cota.
         var refill = '';
         if (credit) {
           try {
@@ -1839,9 +1966,15 @@
             if (rd.n > 0 && saveDB(db)) refill = ' +' + rd.n + ' nova(s) na sua caixa.';
           } catch (e6) {}
         }
-        renderAll('OS ' + os + ' → ' + s.value + '.' + refill);
-        refreshIfShared('OS ' + os + ' → ' + s.value + '.' + refill);
+        var msg = 'OS ' + os + ' → ' + (novo === 'OCORRENCIA' ? 'OCORRÊNCIA' : novo) + '.' + refill;
+        renderAll(msg);
+        refreshIfShared(msg);
       }
+      if (novo === 'OCORRENCIA') {
+        openOcorrenciaModal(os, p.motivoOcorrencia || '', aplicar, function () { renderAll(); });
+        return;
+      }
+      aplicar();
     });
 
     document.querySelectorAll('.check-pill').forEach(function (pill) {
@@ -1923,15 +2056,31 @@
     });
     var bc = $('btn-clear');
     if (bc) bc.addEventListener('click', function () {
-      if (!confirm('ATENÇÃO: limpar apaga a caixa + quarentena de TODOS os usuários (banco compartilhado).')) return;
+      if (!confirm('ATENÇÃO: limpar apaga caixa + quarentena + reprovadas de TODOS os usuários (banco compartilhado).')) return;
       if (!confirm('Confirma mesmo? Essa ação afeta todos e não tem volta.')) return;
       if (!saveDB({ principal: [], quarentena: [], imports: [], reproved: [] })) {
         alert('Não foi possível limpar: banco indisponível.');
         return;
       }
       state.result = null; state.siateClean = []; state.listClean = [];
-      $('log').textContent = 'Banco limpo.';
-      renderAll('Banco limpo para todos.');
+      $('log').textContent = 'Limpando o banco…';
+      // Confirma no servidor (re-busca) antes de dizer que limpou.
+      var done = function (msg) { renderAll(msg); };
+      try {
+        if (window.SADDB && SADDB.refresh) {
+          SADDB.refresh().then(function () {
+            var d = loadDB();
+            var restou = d.principal.length + d.quarentena.length + d.reproved.length;
+            done(restou
+              ? 'Ainda restam ' + restou + ' registro(s) no servidor — verifique permissões (RLS) do admin.'
+              : 'Banco limpo para todos (caixa, quarentena e reprovadas).');
+          });
+        } else {
+          done('Banco limpo para todos.');
+        }
+      } catch (e) {
+        done('Banco limpo para todos.');
+      }
     });
   }
 

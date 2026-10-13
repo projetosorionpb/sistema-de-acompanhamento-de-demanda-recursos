@@ -110,11 +110,26 @@ a config já vai no `js/config.js`.
   encerrar, re-busca do servidor (`refreshIfShared`) para ver a caixa atualizada.
 - O topo do app mostra **☁ Compartilhado** (Supabase ativo) ou ⚠/⚙ sem banco.
 
+## 7.1. Atualizações recentes (rode o SQL de novo)
+
+O schema é idempotente — rode `docs/SUPABASE_SCHEMA.sql` de novo para aplicar:
+
+- **Status `OCORRENCIA`** substitui `PENDENTE` (a constraint é migrada e as
+  linhas antigas convertidas).
+- Coluna **`motivo_ocorrencia`** em `demandas` (motivo digitado no modal).
+- Tela **Encerrados**: OS `ENCERRADO` saem da caixa principal.
+- **Usuário não pode liberar** OS — a policy `member_update_demandas` agora
+  exige `responsavel = e-mail` no `WITH CHECK`.
+- **Limpar banco** apaga caixa + quarentena + reprovadas + histórico de
+  importações, no Supabase.
+
 ## 8. Checklist de aceite
 
 - [ ] SQL rodou sem erro; 6 tabelas visíveis.
-- [ ] 6 admins com `profiles.role='admin'`.
+- [ ] Contas admin com `profiles.role='admin'`.
 - [ ] `js/config.js` preenchido e site no ar abre `login.html`.
 - [ ] Importação de teste: 2ª importação **não zerou** a caixa.
-- [ ] Quarentena: **Apagar TUDO** pede dupla confirmação e não toca a caixa.
+- [ ] Quarentena: **Apagar TUDO** pede dupla confirmação e some no Supabase.
+- [ ] Encerrar uma OS: ela sai da caixa e aparece em **Encerrados**.
+- [ ] Marcar **Ocorrência**: abre o modal e salva o motivo.
 - [ ] Caixa: clique em **DATA SOL** alterna antigas ↔ novas.

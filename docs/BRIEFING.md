@@ -37,11 +37,11 @@ Admin na quarentena → APROVAR (vai p/ caixa, A INICIAR) ou REPROVAR (arquiva)
 ```
 
 ## 5. Status da demanda
-`A INICIAR` → `EM ANDAMENTO` → `PENDENTE` / `ENCERRADO` (troca livre pelo usuário na caixa).
+`A INICIAR` → `EM ANDAMENTO` → `OCORRENCIA` (com motivo) / `ENCERRADO` (troca livre pelo usuário na caixa). Encerradas vão para a tela **Encerrados**.
 
 ## 6. Perfis
 - **admin**: upload, filtros, comparar, jogar no banco, aprovar/reprovar quarentena, tudo da caixa.
-- **usuario**: só caixa principal (pegar/liberar, trocar status), quarentena somente leitura.
+- **usuario**: só caixa principal (pegar, trocar status — não libera), encerrados.
 
 ## 7. Identidade visual
 Igual ao `carregamentoepdpb`: header fixo + badge, toggle dark/light, botão gradiente `#f0a500→#ff6b35`, cards `panel`, badges, tabelas, footer “Feito por Valdeci Nunes”, fontes DM Sans + Space Mono.

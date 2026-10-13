@@ -53,6 +53,7 @@
       createdAt: r.created_at || '',
       encerradoEm: r.encerrado_em || null,
       encerradoPor: r.encerrado_por || null,
+      motivoOcorrencia: r.motivo_ocorrencia || '',
     };
   }
   function demandToRow(p) {
@@ -67,6 +68,7 @@
       origem: p.origem || 'CONGRUENTE',
       encerrado_em: p.encerradoEm || null,
       encerrado_por: p.encerradoPor || null,
+      motivo_ocorrencia: p.motivoOcorrencia || '',
     };
   }
   // A quarentena local usa chaves curtas (n,c,d,r,cid,cli,t,desc,loc) — o JSONB
@@ -181,12 +183,16 @@
     (cache.reproved || []).forEach(function (x) { nextR[keyOf(x)] = x; });
     var newR = [];
     (cache.reproved || []).forEach(function (x) { if (!prevR[keyOf(x)]) newR.push(repToRow(x)); });
+    var delR = [];
+    (prev.reproved || []).forEach(function (x) { if (!nextR[keyOf(x)]) delR.push(x); });
 
     // Importações: insere as ainda não sincronizadas (flag _synced), nunca duplica.
     var newI = [], pendingI = [];
     (cache.imports || []).forEach(function (x) {
       if (!x._synced) { newI.push(impToRow(x)); pendingI.push(x); }
     });
+    // Importações removidas (limpar banco) → apaga o histórico no servidor.
+    var delI = (prev.imports || []).length > 0 && !(cache.imports || []).length;
 
     // Configuração do app (ex.: distribuição): só grava se mudou.
     var cfgChanged = JSON.stringify(prev.cfg || null) !== JSON.stringify(cache.cfg || null);
@@ -200,13 +206,28 @@
     updP.forEach(function (row) {
       ops.push(client.from('demandas').update(row).eq('numos', row.numos));
     });
-    chunk(delP, BATCH).forEach(function (b) { ops.push(client.from('demandas').delete().in('numos', b)); });
+    // Apagar em massa (quando a lista final fica vazia) é mais robusto que
+    // apagar item a item — usado pelo "Limpar banco".
+    if (delP.length) {
+      if (!(cache.principal || []).length) ops.push(client.from('demandas').delete().neq('numos', ''));
+      else chunk(delP, BATCH).forEach(function (b) { ops.push(client.from('demandas').delete().in('numos', b)); });
+    }
     chunk(newQ, BATCH).forEach(function (b) { ops.push(client.from('quarentena').upsert(b, { onConflict: 'numos,origem' })); });
-    delQ.forEach(function (x) {
-      ops.push(client.from('quarentena').delete().eq('numos', x.numos).eq('origem', x.origem));
-    });
+    if (delQ.length) {
+      if (!(cache.quarentena || []).length) ops.push(client.from('quarentena').delete().neq('numos', ''));
+      else delQ.forEach(function (x) {
+        ops.push(client.from('quarentena').delete().eq('numos', x.numos).eq('origem', x.origem));
+      });
+    }
     chunk(newR, BATCH).forEach(function (b) { ops.push(client.from('reprovadas').upsert(b, { onConflict: 'numos,origem' })); });
+    if (delR.length) {
+      if (!(cache.reproved || []).length) ops.push(client.from('reprovadas').delete().neq('numos', ''));
+      else delR.forEach(function (x) {
+        ops.push(client.from('reprovadas').delete().eq('numos', x.numos).eq('origem', x.origem));
+      });
+    }
     chunk(newI, BATCH).forEach(function (b) { ops.push(client.from('importacoes').insert(b)); });
+    if (delI) ops.push(client.from('importacoes').delete().neq('id', -1));
     if (cfgChanged) ops.push(client.from('config').upsert({ key: 'distrib', valor: cache.cfg || {} }, { onConflict: 'key' }));
 
     if (!ops.length) { baseline = JSON.stringify(cache); return Promise.resolve(); }

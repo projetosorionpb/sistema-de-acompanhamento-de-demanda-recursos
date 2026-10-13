@@ -15,14 +15,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20261013b">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/db.js"></script>
-<script src="js/icons.js"></script>
-<script src="js/theme.js"></script>
+<script src="js/config.js?v=20261013b"></script>
+<script src="js/auth.js?v=20261013b"></script>
+<script src="js/db.js?v=20261013b"></script>
+<script src="js/icons.js?v=20261013b"></script>
+<script src="js/theme.js?v=20261013b"></script>
 </head>
 <body>
 
@@ -39,6 +39,7 @@
     <nav class="nav">
       <div class="nav-label">Operação</div>
       <button class="nav-item" data-nav="caixa"><span class="ni" data-icon="inbox"></span>Caixa principal<span class="nb" id="tab-n-p">0</span></button>
+      <button class="nav-item" data-nav="encerrados"><span class="ni" data-icon="check-circle"></span>Encerrados</button>
       <button class="nav-item admin-only" data-nav="quarentena"><span class="ni" data-icon="shield"></span>Quarentena<span class="nb" id="tab-n-q">0</span></button>
       <button class="nav-item admin-only" data-nav="acompanhar"><span class="ni" data-icon="users"></span>Acompanhar usuários</button>
       <button class="nav-item admin-only" data-nav="metricas"><span class="ni" data-icon="chart"></span>Métricas</button>
@@ -153,7 +154,7 @@
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-blue"><span data-icon="inbox" data-size="16"></span></div><div class="stat-label">Na minha caixa</div></div><div class="stat-value" id="ur-total">0</div><div class="stat-sub">OS com você</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray"><span data-icon="clipboard" data-size="16"></span></div><div class="stat-label">A iniciar</div></div><div class="stat-value" id="ur-ini">0</div><div class="stat-sub">ainda não começou</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow"><span data-icon="refresh" data-size="16"></span></div><div class="stat-label">Em andamento</div></div><div class="stat-value" id="ur-and" style="color:var(--yellow)">0</div><div class="stat-sub">trabalhando agora</div></div>
-          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-red"><span data-icon="alert" data-size="16"></span></div><div class="stat-label">Em ocorrência</div></div><div class="stat-value" id="ur-pen" style="color:var(--red)">0</div><div class="stat-sub">pendentes</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-red"><span data-icon="alert" data-size="16"></span></div><div class="stat-label">Em ocorrência</div></div><div class="stat-value" id="ur-pen" style="color:var(--red)">0</div><div class="stat-sub">em ocorrência</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green"><span data-icon="check" data-size="16"></span></div><div class="stat-label">Encerradas</div></div><div class="stat-value" id="ur-enc" style="color:var(--green)">0</div><div class="stat-sub">total finalizado</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green"><span data-icon="check-circle" data-size="16"></span></div><div class="stat-label">Encerradas no período</div></div><div class="stat-value" id="ur-periodo" style="color:var(--green)">0</div><div class="stat-sub" id="ur-periodo-sub">hoje</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray"><span data-icon="package" data-size="16"></span></div><div class="stat-label">Disponíveis</div></div><div class="stat-value" id="ur-pool">0</div><div class="stat-sub">livres para pegar</div></div>
@@ -309,8 +310,7 @@
           <span class="chip active" data-st="TODOS">Todos</span>
           <span class="chip" data-st="A INICIAR">A iniciar</span>
           <span class="chip" data-st="EM ANDAMENTO">Em andamento</span>
-          <span class="chip" data-st="PENDENTE">Pendente</span>
-          <span class="chip" data-st="ENCERRADO">Encerrado</span>
+          <span class="chip" data-st="OCORRENCIA">Ocorrência</span>
         </div>
         <div class="status-filter" id="scope-row" style="display:none">
           <span class="chip active" data-scope="mine"><span data-icon="user" data-size="14"></span> Minha caixa <b id="scope-n-mine">0</b></span>
@@ -321,6 +321,27 @@
         </div>
         <div class="panel"><div class="panel-body" id="tbl-principal"></div></div>
         <div class="panel-hint" style="margin:-8px 2px 20px">Dica: clique em <b>NUM OS</b> ou <b>DATA SOL</b> no cabeçalho da tabela para alternar crescente/decrescente. Com importação diária, use “mais novas primeiro” ou “mais antigas primeiro”.</div>
+      </section>
+
+      <!-- ═══ VIEW: ENCERRADOS (todos) ═══ -->
+      <section id="view-encerrados" style="display:none">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon" data-icon="search" data-size="16"></span>
+            <input type="text" id="q-enc" placeholder="Buscar por NUM OS, cliente, cidade, responsável…" autocomplete="off">
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon"><span data-icon="check-circle"></span></div>
+            <div>
+              <div class="panel-title">Encerrados</div>
+              <div class="panel-subtitle">OS concluídas — saíram da caixa principal</div>
+            </div>
+            <span class="panel-step" id="enc-count">0 encerrada(s)</span>
+          </div>
+          <div class="panel-body" id="tbl-encerrados"></div>
+        </div>
       </section>
 
       <!-- ═══ VIEW: QUARENTENA (admin) ═══ -->
@@ -507,7 +528,26 @@
   </div>
 </div>
 
-<script src="js/app.js"></script>
+<!-- Modal de ocorrência (motivo) -->
+<div class="modal-overlay" id="modal-ocorrencia" style="display:none">
+  <div class="modal-card">
+    <div class="modal-title">Registrar ocorrência</div>
+    <div class="modal-body">
+      <div class="mono" id="oc-os-label" style="margin-bottom:10px;color:var(--text2)"></div>
+      <div class="modal-field">
+        <label for="oc-motivo">Motivo da ocorrência</label>
+        <textarea id="oc-motivo" rows="4" placeholder="Descreva o motivo pelo qual a obra está ficando em ocorrência…"></textarea>
+      </div>
+      <div class="alert-box" id="oc-err" style="display:none;margin-top:10px"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-ghost" id="oc-cancel">Cancelar</button>
+      <button class="btn-primary" id="oc-ok" style="flex:1;min-width:140px">Salvar ocorrência</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js?v=20261013b"></script>
 <script>
   // Drawer mobile (navegação das views fica no app.js via window.SADshow)
   document.getElementById('menu-btn').addEventListener('click', function () {

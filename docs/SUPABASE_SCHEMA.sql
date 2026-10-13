@@ -20,15 +20,26 @@ create table if not exists demandas (
   obs text,
   dscsvc text,
   status_demanda text not null default 'A INICIAR'
-    check (status_demanda in ('A INICIAR','EM ANDAMENTO','PENDENTE','ENCERRADO')),
+    check (status_demanda in ('A INICIAR','EM ANDAMENTO','OCORRENCIA','ENCERRADO')),
   responsavel text,
   origem text not null default 'CONGRUENTE',
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   -- métrica de conclusão: quando/quem encerrou (app preenche ao marcar ENCERRADO)
   encerrado_em timestamptz,
-  encerrado_por text
+  encerrado_por text,
+  -- motivo informado quando a OS entra em OCORRENCIA
+  motivo_ocorrencia text
 );
+
+-- ── Migrações (bancos já existentes) ──
+-- status PENDENTE virou OCORRENCIA
+alter table demandas drop constraint if exists demandas_status_demanda_check;
+update demandas set status_demanda = 'OCORRENCIA' where status_demanda = 'PENDENTE';
+alter table demandas add constraint demandas_status_demanda_check
+  check (status_demanda in ('A INICIAR','EM ANDAMENTO','OCORRENCIA','ENCERRADO'));
+-- motivo da ocorrência
+alter table demandas add column if not exists motivo_ocorrencia text;
 create index if not exists idx_demandas_status on demandas(status_demanda);
 create index if not exists idx_demandas_reg on demandas(codreg);
 create index if not exists idx_demandas_cidade on demandas(cidade);
@@ -147,13 +158,14 @@ drop policy if exists "member_read_demandas" on demandas;
 create policy "member_read_demandas" on demandas
   for select to authenticated
   using (responsavel is null or lower(responsavel) = lower(auth.jwt()->>'email'));
--- Usuário: pode PEGAR (assumir disponível), trabalhar na sua e LIBERAR.
--- Não insere (import é só-admin) nem apaga.
+-- Usuário: pode PEGAR (assumir disponível) e trabalhar na SUA OS.
+-- Não insere (import é só-admin), não apaga e NÃO libera (não pode voltar a
+-- ficar sem responsável) — por isso o WITH CHECK exige responsavel = e-mail.
 drop policy if exists "member_update_demandas" on demandas;
 create policy "member_update_demandas" on demandas
   for update to authenticated
   using (responsavel is null or lower(responsavel) = lower(auth.jwt()->>'email'))
-  with check (responsavel is null or lower(responsavel) = lower(auth.jwt()->>'email'));
+  with check (lower(responsavel) = lower(auth.jwt()->>'email'));
 
 drop policy if exists "auth_all_quarentena" on quarentena;
 drop policy if exists "admin_all_quarentena" on quarentena;
