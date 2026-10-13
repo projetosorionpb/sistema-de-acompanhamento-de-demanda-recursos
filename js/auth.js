@@ -52,15 +52,58 @@ function getUsers() {
   return _profilesCache || [];
 }
 
-// Criação/exclusão/papel: pelo Dashboard do Supabase (não pelo app).
-function createUser() {
-  return { error: 'Crie a conta em Supabase → Authentication → Users (Auto Confirm) e ajuste profiles.role no Table Editor.' };
+// Criação/exclusão/papel: pelo site (admin) ou pelo Dashboard.
+// Criar conta: signUp em um cliente temporário (não desloga o admin) + profiles.role.
+async function createUser(email, password, role) {
+  email = String(email || '').trim().toLowerCase();
+  role = (role === 'admin') ? 'admin' : 'usuario';
+  if (!email || email.indexOf('@') === -1) return { error: 'E-mail inválido.' };
+  if (!password || String(password).length < 6) return { error: 'Senha deve ter ao menos 6 caracteres.' };
+  if (!isSupabaseMode()) return { error: 'Supabase não configurado.' };
+  var me = await getCurrentUserEmail();
+  if (!isAdminEmail(me)) return { error: 'Somente admin pode criar usuários.' };
+  try {
+    var tmp = window.supabase.createClient(
+      window.SAD_CONFIG.SUPABASE_URL, window.SAD_CONFIG.SUPABASE_ANON_KEY,
+      { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'sad-tmp-signup' } }
+    );
+    var res = await tmp.auth.signUp({ email: email, password: password });
+    if (res.error) return { error: res.error.message };
+    var user = res.data && res.data.user;
+    var needsConfirm = !(res.data && res.data.session);
+    if (user && user.id) {
+      var up = await supa().from('profiles').update({ role: role, name: email.split('@')[0] }).eq('id', user.id);
+      if (up.error) {
+        var ins = await supa().from('profiles').insert({ id: user.id, email: email, role: role, name: email.split('@')[0] });
+        if (ins.error) return { error: ins.error.message };
+      }
+    }
+    try { await refreshProfilesCache(); } catch (e) {}
+    return { data: { email: email, role: role, needsConfirm: needsConfirm, id: user && user.id }, error: null };
+  } catch (e) {
+    return { error: (e && e.message) || 'Falha ao criar usuário.' };
+  }
 }
-function deleteUser() {
-  return { error: 'Exclua a conta em Supabase → Authentication → Users (o profile sai junto).' };
+
+async function deleteUser() {
+  return { error: 'Excluir conta: Supabase → Authentication → Users (o profile sai junto).' };
 }
-function setUserRole() {
-  return { error: 'Troque o papel em Supabase → Table Editor → profiles → role.' };
+
+async function setUserRole(email, role) {
+  email = String(email || '').trim().toLowerCase();
+  role = (role === 'admin') ? 'admin' : 'usuario';
+  if (!isSupabaseMode()) return { error: 'Supabase não configurado.' };
+  var me = await getCurrentUserEmail();
+  if (!isAdminEmail(me)) return { error: 'Somente admin pode alterar papéis.' };
+  if (me && me === email && role !== 'admin') return { error: 'Você não pode rebaixar a própria conta admin.' };
+  try {
+    var res = await supa().from('profiles').update({ role: role }).eq('email', email);
+    if (res.error) return { error: res.error.message };
+    try { await refreshProfilesCache(); } catch (e) {}
+    return { data: true, error: null };
+  } catch (e) {
+    return { error: (e && e.message) || 'Falha ao alterar papel.' };
+  }
 }
 
 async function getSession() {

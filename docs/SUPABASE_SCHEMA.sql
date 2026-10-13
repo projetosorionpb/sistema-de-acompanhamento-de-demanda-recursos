@@ -179,9 +179,19 @@ drop policy if exists "auth_read_profiles" on profiles;
 create policy "auth_read_profiles" on profiles
   for select to authenticated using (true);
 
+-- Só admin altera perfis (papéis). Usamos SECURITY DEFINER para evitar
+-- recursão de RLS (uma policy em profiles que consulta profiles).
+create or replace function public.is_admin()
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin');
+$$;
+
 drop policy if exists "auth_update_own_profile" on profiles;
-create policy "auth_update_own_profile" on profiles
-  for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
+drop policy if exists "admin_all_profiles" on profiles;
+create policy "admin_all_profiles" on profiles
+  for all to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- Promover a admin / criar contas: faça no Dashboard
 -- Authentication → Users → Add user, depois Table Editor → profiles → role='admin'.

@@ -1357,23 +1357,27 @@
     }
   }
 
-  // ---------- usuários (Supabase Auth: gestão pelo Dashboard) ----------
+  // ---------- usuários (Supabase Auth: criar/trocar papel pelo site) ----------
   function renderUsuarios() {
     var el = $('tbl-usuarios');
     if (!el || !state.isAdmin || typeof getUsers !== 'function') return;
     var users = getUsers();
-    var h = '<div class="table-wrap"><table style="min-width:520px"><thead><tr>' +
-      '<th>E-mail</th><th>Perfil</th><th>Criado em</th>' +
+    var h = '<div class="table-wrap"><table style="min-width:560px"><thead><tr>' +
+      '<th>E-mail</th><th>Perfil</th><th>Criado em</th><th></th>' +
       '</tr></thead><tbody>';
     users.forEach(function (u) {
       var me = state.user && String(state.user.email || '').toLowerCase() === String(u.email).toLowerCase();
       h += '<tr><td class="mono">' + esc(u.email) + (me ? ' <span class="badge badge-blue">você</span>' : '') + '</td>' +
         '<td>' + (u.role === 'admin' ? '<span class="badge badge-yellow">ADMIN</span>' : '<span class="badge badge-gray">USUÁRIO</span>') + '</td>' +
-        '<td class="mono" style="font-size:11px">' + esc((u.createdAt || '').slice(0, 10)) + '</td></tr>';
+        '<td class="mono" style="font-size:11px">' + esc((u.createdAt || '').slice(0, 10)) + '</td>' +
+        '<td style="white-space:nowrap">' +
+        (me ? '<span class="mono" style="font-size:11px;color:var(--text3)">conta atual</span>'
+          : '<button class="btn-small" data-act="user-role" data-email="' + esc(u.email) + '" data-role="' + esc(u.role) + '">tornar ' + (u.role === 'admin' ? 'usuário' : 'admin') + '</button>') +
+        '</td></tr>';
     });
     el.innerHTML = h + '</tbody></table></div>' +
-      '<div class="panel-hint">' + users.length + ' conta(s) no Supabase. Criar conta, excluir e trocar papel: ' +
-      '<b>Authentication → Users</b> e <b>Table Editor → profiles → role</b>.</div>';
+      '<div class="panel-hint">' + users.length + ' conta(s) no Supabase. Crie pelo formulário acima. Excluir conta: ' +
+      '<b>Supabase → Authentication → Users</b>.</div>';
   }
 
   function renderAll(msg) {
@@ -1561,16 +1565,24 @@
     });
     // gestão de usuários (admin, local; Supabase vira definitivo)
     var bua = $('btn-user-add');
-    if (bua) bua.addEventListener('click', function () {
+    if (bua) bua.addEventListener('click', async function () {
       if (!state.isAdmin || typeof createUser !== 'function') { alert('Somente admin.'); return; }
       var em = (($('new-user-email') || {}).value || '').trim();
       var pw = (($('new-user-pass') || {}).value || '');
       var rl = (($('new-user-role') || {}).value || 'usuario');
-      var r = createUser(em, pw, rl);
-      if (r.error) { alert(r.error); return; }
-      if ($('new-user-email')) $('new-user-email').value = '';
-      if ($('new-user-pass')) $('new-user-pass').value = '';
-      renderAll('Usuário ' + em + ' criado como ' + rl + '.');
+      bua.disabled = true;
+      try {
+        var r = await createUser(em, pw, rl);
+        if (r.error) { alert(r.error); return; }
+        if ($('new-user-email')) $('new-user-email').value = '';
+        if ($('new-user-pass')) $('new-user-pass').value = '';
+        var extra = (r.data && r.data.needsConfirm)
+          ? ' O usuário precisa confirmar o e-mail (ou desative "Confirm email" no Supabase) para entrar.'
+          : '';
+        renderAll('Usuário ' + em + ' criado como ' + rl + '.' + extra);
+      } finally {
+        bua.disabled = false;
+      }
     });
 
     document.addEventListener('click', function (e) {
@@ -1658,25 +1670,17 @@
           saveDB(db); renderAll('OS ' + os + ' reprovada e arquivada.');
         }
       }
-      if (act === 'user-del') {
-        if (!state.isAdmin || typeof deleteUser !== 'function') { alert('Somente admin.'); return; }
-        var em = btn.getAttribute('data-email') || '';
-        if (!confirm('Excluir usuário ' + em + '?')) return;
-        var rd = deleteUser(em);
-        if (rd.error) { alert(rd.error); return; }
-        renderAll('Usuário ' + em + ' excluído.');
-      }
       if (act === 'user-role') {
         if (!state.isAdmin || typeof setUserRole !== 'function') { alert('Somente admin.'); return; }
         var em2 = btn.getAttribute('data-email') || '';
-        var users = (typeof getUsers === 'function') ? getUsers() : [];
-        var tgt = null;
-        users.forEach(function (uu) { if (String(uu.email).toLowerCase() === String(em2).toLowerCase()) tgt = uu; });
-        if (!tgt) return;
-        var nr = tgt.role === 'admin' ? 'usuario' : 'admin';
-        var rr = setUserRole(em2, nr);
-        if (rr.error) { alert(rr.error); return; }
-        renderAll(em2 + ' agora é ' + nr + '.');
+        var curRole = btn.getAttribute('data-role') || 'usuario';
+        var nr = curRole === 'admin' ? 'usuario' : 'admin';
+        btn.disabled = true;
+        setUserRole(em2, nr).then(function (rr) {
+          btn.disabled = false;
+          if (rr && rr.error) { alert(rr.error); return; }
+          renderAll(em2 + ' agora é ' + nr + '.');
+        });
       }
     });
 
@@ -2012,8 +2016,6 @@
         tb.insertBefore(modeBadge, tb.firstChild);
       }
     } catch (eM) {}
-    // Gestão de usuários é pelo Dashboard do Supabase: esconde o formulário de criar.
-    try { var ucg = $('user-create-grid'); if (ucg) ucg.style.display = 'none'; } catch (eG) {}
     var role = sess.role || (state.isAdmin ? 'admin' : 'usuario');
     $('me').textContent = sess.email;
     if ($('role')) $('role').textContent = role;

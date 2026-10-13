@@ -22,18 +22,22 @@
 3. Confira em **Table Editor**: existem `demandas`, `quarentena`,
    `reprovadas`, `importacoes`, `profiles`, `config`.
 
-## 3. Criar os logins (6 admins + 10 usuários)
+## 3. Criar os logins
 
-1. **Authentication → Users → Add user → Create new user**:
-   - crie primeiro o seu admin (ex: `voce@empresa.com`), marque
-     **Auto Confirm user** → **Create user**.
-2. **Table Editor → profiles**: ache a linha desse e-mail e troque
-   `role` para `admin` (o 1º signup já nasce admin pelo trigger; os
-   seguintes nascem `usuario` — promova mais 5 a `admin` aqui).
-3. Repita **Add user** para as outras ~15 contas (ou passe o link e peça
-   para cada um fazer **Sign up** — o perfil nasce sozinho como `usuario`).
-4. Habilite provedor e-mail/senha (já vem habilitado por padrão em
-   **Authentication → Providers → Email**).
+1. Crie **o primeiro admin** em **Authentication → Users → Add user**
+   (ex: `voce@empresa.com`), marque **Auto Confirm user** → **Create user**.
+   O perfil nasce sozinho; o primeiro usuário vira `admin` pelo trigger.
+2. Abra o site logado como esse admin → **Acompanhar usuários**:
+   - **Criar**: informe e-mail, senha e o papel (admin/usuário) → **Criar**.
+   - **tornar admin / tornar usuário**: troca o papel de qualquer conta.
+   > Excluir conta: **Supabase → Authentication → Users**.
+3. Para o **Criar pelo site** funcionar, em **Authentication → Providers → Email**:
+   - mantenha **Enable sign ups** ligado;
+   - idealmente **desligue "Confirm email"** para o usuário entrar na hora.
+     (Se ligado, o app avisa que o usuário precisa confirmar o e-mail.)
+
+> Alternativa sem o site: **Authentication → Users → Add user** e ajuste
+> `profiles.role` no Table Editor.
 
 ## 4. Ligar o site no banco (2 min)
 
@@ -108,7 +112,7 @@ a config já vai no `js/config.js`.
 
 ## 8. Checklist de aceite
 
-- [ ] SQL rodou sem erro; 5 tabelas visíveis.
+- [ ] SQL rodou sem erro; 6 tabelas visíveis.
 - [ ] 6 admins com `profiles.role='admin'`.
 - [ ] `js/config.js` preenchido e site no ar abre `login.html`.
 - [ ] Importação de teste: 2ª importação **não zerou** a caixa.
