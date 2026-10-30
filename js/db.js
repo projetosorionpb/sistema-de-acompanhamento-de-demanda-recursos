@@ -54,6 +54,8 @@
       encerradoEm: r.encerrado_em || null,
       encerradoPor: r.encerrado_por || null,
       motivoOcorrencia: r.motivo_ocorrencia || '',
+      despachadoEm: r.despachado_em || null,
+      despachadoPor: r.despachado_por || null,
     };
   }
   function demandToRow(p) {
@@ -69,6 +71,8 @@
       encerrado_em: p.encerradoEm || null,
       encerrado_por: p.encerradoPor || null,
       motivo_ocorrencia: p.motivoOcorrencia || '',
+      despachado_em: p.despachadoEm || null,
+      despachado_por: p.despachadoPor || null,
     };
   }
   // A quarentena local usa chaves curtas (n,c,d,r,cid,cli,t,desc,loc) — o JSONB

@@ -20,7 +20,7 @@ create table if not exists demandas (
   obs text,
   dscsvc text,
   status_demanda text not null default 'A INICIAR'
-    check (status_demanda in ('A INICIAR','EM ANDAMENTO','OCORRENCIA','ENCERRADO')),
+    check (status_demanda in ('A INICIAR','EM ANDAMENTO','OCORRENCIA','ENCERRADO','DESPACHADO')),
   responsavel text,
   origem text not null default 'CONGRUENTE',
   created_at timestamptz default now(),
@@ -29,23 +29,30 @@ create table if not exists demandas (
   encerrado_em timestamptz,
   encerrado_por text,
   -- motivo informado quando a OS entra em OCORRENCIA
-  motivo_ocorrencia text
+  motivo_ocorrencia text,
+  -- despacho: quando/quem despachou (app preenche ao marcar DESPACHADO)
+  despachado_em timestamptz,
+  despachado_por text
 );
 
 -- ── Migrações (bancos já existentes) ──
--- status PENDENTE virou OCORRENCIA
+-- status PENDENTE virou OCORRENCIA; DESPACHADO é um status terminal adicional
 alter table demandas drop constraint if exists demandas_status_demanda_check;
 update demandas set status_demanda = 'OCORRENCIA' where status_demanda = 'PENDENTE';
 alter table demandas add constraint demandas_status_demanda_check
-  check (status_demanda in ('A INICIAR','EM ANDAMENTO','OCORRENCIA','ENCERRADO'));
+  check (status_demanda in ('A INICIAR','EM ANDAMENTO','OCORRENCIA','ENCERRADO','DESPACHADO'));
 -- motivo da ocorrência
 alter table demandas add column if not exists motivo_ocorrencia text;
+-- colunas de despacho
+alter table demandas add column if not exists despachado_em timestamptz;
+alter table demandas add column if not exists despachado_por text;
 create index if not exists idx_demandas_status on demandas(status_demanda);
 create index if not exists idx_demandas_reg on demandas(codreg);
 create index if not exists idx_demandas_cidade on demandas(cidade);
 create index if not exists idx_demandas_data on demandas(data_iso);
 create index if not exists idx_demandas_resp on demandas(responsavel);
 create index if not exists idx_demandas_enc on demandas(encerrado_por, encerrado_em);
+create index if not exists idx_demandas_desp on demandas(despachado_por, despachado_em);
 
 -- ── 2. Quarentena: divergentes ──
 create table if not exists quarentena (

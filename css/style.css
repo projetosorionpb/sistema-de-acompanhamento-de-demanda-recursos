@@ -16,6 +16,7 @@
   --red: #f04438;
   --yellow: #eaaa08;
   --blue: #2e90fa;
+  --purple: #a855f7;
   --sidebar-bg: #0e1117;
   --radius: 10px;
   --radius-sm: 8px;
@@ -42,6 +43,7 @@
   --red: #b42318;
   --yellow: #93370d;
   --blue: #175cd3;
+  --purple: #7e22ce;
   --sidebar-bg: #0e1117;
   --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
   --shadow-md: 0 8px 24px rgba(16, 24, 40, .1);
@@ -168,6 +170,7 @@ body {
 .tint-yellow { background: rgba(234, 170, 8, .13); color: var(--yellow); }
 .tint-red { background: rgba(240, 68, 56, .12); color: var(--red); }
 .tint-blue { background: rgba(46, 144, 250, .12); color: var(--blue); }
+.tint-purple { background: rgba(168, 85, 247, .13); color: var(--purple); }
 .tint-gray { background: var(--surface2); color: var(--text2); }
 .tint-accent { background: var(--accent-soft); color: var(--accent); }
 
@@ -393,6 +396,7 @@ td { padding: 12px 14px; vertical-align: middle; }
 .badge-red { background: rgba(240, 68, 56, .12); color: var(--red); }
 .badge-yellow { background: rgba(234, 170, 8, .14); color: var(--yellow); }
 .badge-blue { background: rgba(46, 144, 250, .13); color: var(--blue); }
+.badge-purple { background: rgba(168, 85, 247, .13); color: var(--purple); }
 .badge-gray { background: var(--surface2); color: var(--text2); }
 .badge-gray::before { display: none; }
 .status-select {

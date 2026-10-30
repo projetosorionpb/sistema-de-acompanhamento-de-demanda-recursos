@@ -37,7 +37,7 @@ Admin na quarentena → APROVAR (vai p/ caixa, A INICIAR) ou REPROVAR (arquiva)
 ```
 
 ## 5. Status da demanda
-`A INICIAR` → `EM ANDAMENTO` → `OCORRENCIA` (com motivo) / `ENCERRADO` (troca livre pelo usuário na caixa). Encerradas vão para a tela **Encerrados**.
+`A INICIAR` → `EM ANDAMENTO` → `OCORRENCIA` (com motivo) / `ENCERRADO` / `DESPACHADO` (troca livre pelo usuário na caixa). Encerradas vão para **Encerrados**; despachadas vão para **Despachados**.
 
 ## 6. Perfis
 - **admin**: upload, filtros, comparar, jogar no banco, aprovar/reprovar quarentena, tudo da caixa.

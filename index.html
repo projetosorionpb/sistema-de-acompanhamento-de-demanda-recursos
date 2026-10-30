@@ -40,6 +40,7 @@
       <div class="nav-label">Operação</div>
       <button class="nav-item" data-nav="caixa"><span class="ni" data-icon="inbox"></span>Caixa principal<span class="nb" id="tab-n-p">0</span></button>
       <button class="nav-item" data-nav="encerrados"><span class="ni" data-icon="check-circle"></span>Encerrados</button>
+      <button class="nav-item" data-nav="despachados"><span class="ni" data-icon="send"></span>Despachados<span class="nb" id="tab-n-d">0</span></button>
       <button class="nav-item" data-nav="ocorrencias"><span class="ni" data-icon="alert-circle"></span>Ocorrências<span class="nb" id="tab-n-o">0</span></button>
       <button class="nav-item admin-only" data-nav="quarentena"><span class="ni" data-icon="shield"></span>Quarentena<span class="nb" id="tab-n-q">0</span></button>
       <button class="nav-item admin-only" data-nav="acompanhar"><span class="ni" data-icon="users"></span>Acompanhar usuários</button>
@@ -109,7 +110,7 @@
               </div>
             </div>
             <div id="dist-tbl" style="margin-top:14px"></div>
-            <div class="panel-hint">Regra: vale para contas <b>usuário</b> (admins não recebem). Cada pessoa tem o <b>Auto</b> (liga/desliga a distribuição automática só dela) e a <b>Qtd individual</b> (vazia = usa o padrão; 0 = pula). Quem está com <b>zero OS aberta</b> ganha a cota das <b>mais antigas disponíveis</b>.</div>
+            <div class="panel-hint">Regra: vale para contas <b>usuário</b> (admins não recebem). Cada pessoa tem o <b>Auto</b> (liga/desliga a distribuição automática só dela) e a <b>Qtd individual</b> (vazia = usa o padrão; 0 = pula). Quem está com <b>zero OS aberta</b> (nada ou tudo ENCERRADO/DESPACHADO) ganha a cota das <b>mais antigas disponíveis</b>.</div>
             <div class="log-box" id="dist-log">Distribuição nunca executada.</div>
           </div>
         </div>
@@ -158,6 +159,7 @@
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow"><span data-icon="refresh" data-size="16"></span></div><div class="stat-label">Em andamento</div></div><div class="stat-value" id="ur-and" style="color:var(--yellow)">0</div><div class="stat-sub">trabalhando agora</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-red"><span data-icon="alert" data-size="16"></span></div><div class="stat-label">Em ocorrência</div></div><div class="stat-value" id="ur-pen" style="color:var(--red)">0</div><div class="stat-sub">em ocorrência</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green"><span data-icon="check" data-size="16"></span></div><div class="stat-label">Encerradas</div></div><div class="stat-value" id="ur-enc" style="color:var(--green)">0</div><div class="stat-sub">total finalizado</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-purple"><span data-icon="send" data-size="16"></span></div><div class="stat-label">Despachadas</div></div><div class="stat-value" id="ur-desp" style="color:var(--purple)">0</div><div class="stat-sub">fora da caixa</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green"><span data-icon="check-circle" data-size="16"></span></div><div class="stat-label">Encerradas no período</div></div><div class="stat-value" id="ur-periodo" style="color:var(--green)">0</div><div class="stat-sub" id="ur-periodo-sub">hoje</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray"><span data-icon="package" data-size="16"></span></div><div class="stat-label">Disponíveis</div></div><div class="stat-value" id="ur-pool">0</div><div class="stat-sub">livres para pegar</div></div>
         </div>
@@ -313,6 +315,7 @@
           <span class="chip" data-st="A INICIAR">A iniciar</span>
           <span class="chip" data-st="EM ANDAMENTO">Em andamento</span>
         </div>
+        <div class="panel-hint" style="margin:-8px 2px 12px">OS com status <b>DESPACHADO</b> saem desta caixa e ficam em <a href="#" id="link-despachados" style="color:var(--accent);font-weight:600">Despachados</a>.</div>
         <div class="status-filter" id="scope-row" style="display:none">
           <span class="chip active" data-scope="mine"><span data-icon="user" data-size="14"></span> Minha caixa <b id="scope-n-mine">0</b></span>
           <span class="chip" data-scope="pool"><span data-icon="package" data-size="14"></span> Disponíveis <b id="scope-n-pool">0</b></span>
@@ -342,6 +345,27 @@
             <span class="panel-step" id="enc-count">0 encerrada(s)</span>
           </div>
           <div class="panel-body" id="tbl-encerrados"></div>
+        </div>
+      </section>
+
+      <!-- ═══ VIEW: DESPACHADOS (todos) ═══ -->
+      <section id="view-despachados" style="display:none">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon" data-icon="search" data-size="16"></span>
+            <input type="text" id="q-desp" placeholder="Buscar por NUM OS, cliente, cidade, responsável…" autocomplete="off">
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon"><span data-icon="send"></span></div>
+            <div>
+              <div class="panel-title">Despachados</div>
+              <div class="panel-subtitle">OS despachadas — saíram da caixa principal</div>
+            </div>
+            <span class="panel-step" id="desp-count">0 despachada(s)</span>
+          </div>
+          <div class="panel-body" id="tbl-despachados"></div>
         </div>
       </section>
 
@@ -453,7 +477,7 @@
         <div class="stats-grid" id="m-kpis">
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green"><span data-icon="check-circle" data-size="16"></span></div><div class="stat-label">Encerradas no período</div></div><div class="stat-value" id="m-k-total" style="color:var(--green)">0</div><div class="stat-sub" id="m-k-range">—</div></div>
           <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-blue"><span data-icon="users" data-size="16"></span></div><div class="stat-label">Usuários ativos</div></div><div class="stat-value" id="m-k-ativos">0</div><div class="stat-sub">encerraram ≥1 no período</div></div>
-          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow"><span data-icon="package" data-size="16"></span></div><div class="stat-label">Em mãos (geral)</div></div><div class="stat-value" id="m-k-maos">0</div><div class="stat-sub">não-encerradas na caixa</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow"><span data-icon="package" data-size="16"></span></div><div class="stat-label">Em mãos (geral)</div></div><div class="stat-value" id="m-k-maos">0</div><div class="stat-sub">não encerradas nem despachadas</div></div>
         </div>
         <div class="panel">
           <div class="panel-header">
@@ -514,7 +538,7 @@
             <div class="panel-icon"><span data-icon="users"></span></div>
             <div>
               <div class="panel-title">Acompanhar usuários</div>
-              <div class="panel-subtitle">Quais OS estão com quais pessoas, em qual status e quantas encerraram hoje/total (só admin vê)</div>
+              <div class="panel-subtitle">Quais OS estão com quais pessoas, em qual status, quantas encerraram hoje e quantas estão despachadas (só admin vê)</div>
             </div>
           </div>
           <div class="panel-body" id="tbl-acompanhar"></div>

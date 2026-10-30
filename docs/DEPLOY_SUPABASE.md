@@ -84,7 +84,8 @@ a config já vai no `js/config.js`.
 5. Caixa: ordene por **Data SOL · mais novas/antigas** (select ou clique no
    cabeçalho `NUM OS` / `DATA SOL`).
 6. Equipe: cada usuário pega OS em **Disponíveis** → trabalha em
-   **Minha caixa** → marca **ENCERRADO** (conta na métrica do dia).
+   **Minha caixa** → marca **ENCERRADO** (conta na métrica do dia) ou
+   **DESPACHADO** (sai da caixa e vai para **Despachados**).
    Ninguém vê a caixa alheia; admin acompanha tudo em
    **Acompanhar usuários** (Hoje ✅ / Em mãos / Total por pessoa) e
    **📈 Métricas** (dia/semana/mês/personalizado + CSV).
@@ -118,6 +119,8 @@ O schema é idempotente — rode `docs/SUPABASE_SCHEMA.sql` de novo para aplicar
   linhas antigas convertidas).
 - Coluna **`motivo_ocorrencia`** em `demandas` (motivo digitado no modal).
 - Tela **Encerrados**: OS `ENCERRADO` saem da caixa principal.
+- Status **`DESPACHADO`** + colunas `despachado_em`/`despachado_por` e tela
+  **Despachados**: OS despachadas saem da caixa e podem ser reabertas.
 - **Usuário não pode liberar** OS — a policy `member_update_demandas` agora
   exige `responsavel = e-mail` no `WITH CHECK`.
 - **Limpar banco** apaga caixa + quarentena + reprovadas + histórico de
@@ -131,5 +134,6 @@ O schema é idempotente — rode `docs/SUPABASE_SCHEMA.sql` de novo para aplicar
 - [ ] Importação de teste: 2ª importação **não zerou** a caixa.
 - [ ] Quarentena: **Apagar TUDO** pede dupla confirmação e some no Supabase.
 - [ ] Encerrar uma OS: ela sai da caixa e aparece em **Encerrados**.
+- [ ] Despachar uma OS: ela sai da caixa e aparece em **Despachados**; **Reabrir** devolve à caixa.
 - [ ] Marcar **Ocorrência**: abre o modal e salva o motivo.
 - [ ] Caixa: clique em **DATA SOL** alterna antigas ↔ novas.
