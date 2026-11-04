@@ -15,14 +15,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261013f">
+<link rel="stylesheet" href="css/style.css?v=20261104a">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js?v=20261013f"></script>
-<script src="js/auth.js?v=20261013f"></script>
-<script src="js/db.js?v=20261013f"></script>
-<script src="js/icons.js?v=20261013f"></script>
-<script src="js/theme.js?v=20261013f"></script>
+<script src="js/config.js?v=20261104a"></script>
+<script src="js/auth.js?v=20261104a"></script>
+<script src="js/db.js?v=20261104a"></script>
+<script src="js/icons.js?v=20261104a"></script>
+<script src="js/theme.js?v=20261104a"></script>
 </head>
 <body>
 
@@ -461,13 +461,26 @@
                 <input type="date" id="m-dfim">
               </div>
               <div class="field">
-                <label>Usuário (tabela diária)</label>
-                <select id="m-user"><option value="">Todos</option></select>
+                <label>Usuário</label>
+                <div class="msel" id="m-user"></div>
+              </div>
+              <div class="field">
+                <label>Status da OS</label>
+                <div class="msel" id="m-status"></div>
+              </div>
+              <div class="field">
+                <label>Regional</label>
+                <div class="msel" id="m-reg"></div>
+              </div>
+              <div class="field">
+                <label>Serviço</label>
+                <div class="msel" id="m-serv"></div>
               </div>
               <div class="field">
                 <label>Exportar</label>
                 <div style="display:flex;gap:8px">
                   <button class="btn-ghost" id="m-export" style="padding:8px 14px;font-size:12px;flex:1"><span data-icon="download" data-size="14"></span>CSV</button>
+                  <button class="btn-ghost" id="m-reset" style="padding:8px 12px;font-size:12px" title="Limpar filtros"><span data-icon="x" data-size="14"></span></button>
                 </div>
               </div>
             </div>
@@ -475,16 +488,74 @@
           </div>
         </div>
         <div class="stats-grid" id="m-kpis">
-          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green"><span data-icon="check-circle" data-size="16"></span></div><div class="stat-label">Encerradas no período</div></div><div class="stat-value" id="m-k-total" style="color:var(--green)">0</div><div class="stat-sub" id="m-k-range">—</div></div>
-          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-blue"><span data-icon="users" data-size="16"></span></div><div class="stat-label">Usuários ativos</div></div><div class="stat-value" id="m-k-ativos">0</div><div class="stat-sub">encerraram ≥1 no período</div></div>
-          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow"><span data-icon="package" data-size="16"></span></div><div class="stat-label">Em mãos (geral)</div></div><div class="stat-value" id="m-k-maos">0</div><div class="stat-sub">não encerradas nem despachadas</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-gray"><span data-icon="database" data-size="16"></span></div><div class="stat-label">OS no filtro</div></div><div class="stat-value" id="m-k-total">0</div><div class="stat-sub">respeitando todos os filtros</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-green"><span data-icon="check-circle" data-size="16"></span></div><div class="stat-label">Encerradas</div></div><div class="stat-value" id="m-k-enc" style="color:var(--green)">0</div><div class="stat-sub">no período</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-purple"><span data-icon="send" data-size="16"></span></div><div class="stat-label">Despachadas</div></div><div class="stat-value" id="m-k-dsp" style="color:var(--purple)">0</div><div class="stat-sub">no período</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-yellow"><span data-icon="package" data-size="16"></span></div><div class="stat-label">Em mãos</div></div><div class="stat-value" id="m-k-maos" style="color:var(--yellow)">0</div><div class="stat-sub">a iniciar + em andamento</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-red"><span data-icon="alert-circle" data-size="16"></span></div><div class="stat-label">Em ocorrência</div></div><div class="stat-value" id="m-k-oco" style="color:var(--red)">0</div><div class="stat-sub">agora</div></div>
+          <div class="stat-card"><div class="stat-top"><div class="stat-ico tint-blue"><span data-icon="users" data-size="16"></span></div><div class="stat-label">Usuários</div></div><div class="stat-value" id="m-k-users">0</div><div class="stat-sub">com OS no filtro</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon"><span data-icon="chart"></span></div>
+            <div>
+              <div class="panel-title">Evolução diária</div>
+              <div class="panel-subtitle" id="m-chart-day-sub">Encerradas e despachadas por dia</div>
+            </div>
+            <span class="panel-step" id="m-chart-day-step">—</span>
+          </div>
+          <div class="panel-body" id="m-chart-day"></div>
+        </div>
+        <div class="metrics-2col">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-icon"><span data-icon="dashboard"></span></div>
+              <div>
+                <div class="panel-title">Por status</div>
+                <div class="panel-subtitle">Composição do filtro atual</div>
+              </div>
+            </div>
+            <div class="panel-body" id="m-chart-status"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-icon"><span data-icon="users"></span></div>
+              <div>
+                <div class="panel-title">Por usuário</div>
+                <div class="panel-subtitle">Top 12 · barra empilhada por status</div>
+              </div>
+            </div>
+            <div class="panel-body" id="m-chart-user"></div>
+          </div>
+        </div>
+        <div class="metrics-2col">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-icon"><span data-icon="flag"></span></div>
+              <div>
+                <div class="panel-title">Por regional</div>
+                <div class="panel-subtitle">OS no filtro por CODREG</div>
+              </div>
+            </div>
+            <div class="panel-body" id="m-chart-reg"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-icon"><span data-icon="clipboard"></span></div>
+              <div>
+                <div class="panel-title">Top serviços</div>
+                <div class="panel-subtitle">10 códigos de serviço com mais OS</div>
+              </div>
+            </div>
+            <div class="panel-body" id="m-chart-serv"></div>
+          </div>
         </div>
         <div class="panel">
           <div class="panel-header">
             <div class="panel-icon"><span data-icon="user"></span></div>
             <div>
               <div class="panel-title">Por usuário</div>
-              <div class="panel-subtitle">Encerradas no período, em mãos e total na caixa</div>
+              <div class="panel-subtitle">Total no filtro, encerradas, despachadas, em mãos e ocorrências</div>
             </div>
           </div>
           <div class="panel-body" id="m-tbl-user"></div>
@@ -593,7 +664,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261013f"></script>
+<script src="js/app.js?v=20261104a"></script>
 <script>
   // Drawer mobile (navegação das views fica no app.js via window.SADshow)
   document.getElementById('menu-btn').addEventListener('click', function () {

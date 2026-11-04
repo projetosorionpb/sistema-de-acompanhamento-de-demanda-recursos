@@ -15,7 +15,7 @@
     result: null, // {cong, soSiate, soList, log}
     view: 'caixa', search: '', statusFilter: 'TODOS',
     cf: { reg: '', codserv: '', cidade: '', dini: '', dfim: '', resp: '' }, // filtros da caixa
-    metrics: { preset: 'hoje', dini: '', dfim: '', user: '' }, // métricas do admin
+    metrics: { preset: 'hoje', dini: '', dfim: '', user: [], status: [], reg: [], serv: [] }, // métricas do admin
     resumo: { preset: 'hoje', dini: '', dfim: '' }, // período do resumo do usuário
     encSearch: '', // busca da tela Encerrados
     ocoSearch: '', // busca da tela Ocorrências
@@ -38,7 +38,7 @@
     distribuir: ['Distribuição', 'Cota automática de OS por usuário: quem zera recebe sozinho.'],
     resumo: ['Resumo', 'Totais da última comparação e do banco local.'],
     acompanhar: ['Acompanhar usuários', 'Quais OS estão com quais pessoas e em qual status.'],
-    metricas: ['Métricas', 'Encerradas por usuário e por dia: hoje, 7/30 dias, mês ou período personalizado.'],
+    metricas: ['Métricas', 'Gráficos e tabelas com filtros múltiplos por período, usuário, status da OS, regional e serviço.'],
   };
   var ADMIN_VIEWS = ['quarentena', 'importar', 'acompanhar', 'metricas', 'distribuir'];
 
@@ -1349,9 +1349,17 @@
       '<div class="panel-hint">“Hoje” = OS com status ENCERRADO registrado hoje para essa pessoa. “Em mãos” = abertas na caixa (nem ocorrência, nem encerradas, nem despachadas). Só aparecem pessoas com OS; contas sem OS não listam.</div>';
   }
 
-  // ---------- métricas do admin (encerradas por usuário/período) ----------
-  // Fonte: status ENCERRADO com encerradoEm/encerradoPor (gravados na troca de
-  // status). Itens antigos sem data entram no total da caixa, mas não no período.
+  // ---------- métricas do admin (encerradas/despachadas por usuário/período) ----------
+  // Fontes: ENCERRADO usa encerradoEm/encerradoPor; DESPACHADO usa
+  // despachadoEm/despachadoPor (gravados na troca de status). OS em aberto
+  // entram como situação atual — o período só recorta encerradas/despachadas.
+  var M_STATUS = [
+    { key: 'A INICIAR', label: 'A iniciar', color: 'var(--blue)' },
+    { key: 'EM ANDAMENTO', label: 'Em andamento', color: 'var(--yellow)' },
+    { key: 'OCORRENCIA', label: 'Ocorrência', color: 'var(--red)' },
+    { key: 'ENCERRADO', label: 'Encerrado', color: 'var(--green)' },
+    { key: 'DESPACHADO', label: 'Despachado', color: 'var(--purple)' }
+  ];
   function fmtDay(d) {
     var m = function (n) { return String(n).padStart(2, '0'); };
     return d.getFullYear() + '-' + m(d.getMonth() + 1) + '-' + m(d.getDate());
@@ -1365,6 +1373,8 @@
     d.setDate(d.getDate() + n);
     return fmtDay(d);
   }
+  function fmtDayShort(ds) { return ds.slice(8, 10) + '/' + ds.slice(5, 7); }
+  function fmtDayBR(ds) { return ds.slice(8, 10) + '/' + ds.slice(5, 7) + '/' + ds.slice(0, 4); }
   function mRange() {
     var tk = todayKey(), p = state.metrics.preset || 'hoje', ini, fim;
     if (p === '7d') { ini = addDaysStr(tk, -6); fim = tk; }
@@ -1377,18 +1387,48 @@
     else { ini = tk; fim = tk; }
     return { ini: ini, fim: fim };
   }
-  function mEncerradas(db, ini, fim, user) {
-    var out = [];
-    db.principal.forEach(function (x) {
-      if (x.statusDemanda !== 'ENCERRADO') return;
-      if (!x.encerradoEm) return;
-      var dk = dayKey(x.encerradoEm);
-      if (!dk || dk < ini || dk > fim) return;
-      var dono = x.encerradoPor || x.responsavel || '';
-      if (user && String(dono).toLowerCase() !== String(user).toLowerCase()) return;
-      out.push({ numos: x.numos, dia: dk, por: dono });
+  function mOwner(p) {
+    if (p.statusDemanda === 'ENCERRADO') return p.encerradoPor || p.responsavel || '';
+    if (p.statusDemanda === 'DESPACHADO') return p.despachadoPor || p.responsavel || '';
+    return p.responsavel || '';
+  }
+  function mEventDay(p) {
+    if (p.statusDemanda === 'ENCERRADO') return dayKey(p.encerradoEm);
+    if (p.statusDemanda === 'DESPACHADO') return dayKey(p.despachadoEm);
+    return '';
+  }
+  function mInPeriod(p, ini, fim) {
+    if (p.statusDemanda === 'ENCERRADO' || p.statusDemanda === 'DESPACHADO') {
+      var dk = mEventDay(p);
+      return !!dk && dk >= ini && dk <= fim;
+    }
+    return true; // OS em aberto = situação atual (não depende do período)
+  }
+  function mIncludes(arr, v) {
+    if (!arr || !arr.length) return true;
+    v = String(v == null ? '' : v);
+    for (var i = 0; i < arr.length; i++) {
+      if (String(arr[i]) === v) return true;
+    }
+    return false;
+  }
+  function mIncludesCI(arr, v) {
+    if (!arr || !arr.length) return true;
+    v = String(v == null ? '' : v).toLowerCase();
+    for (var i = 0; i < arr.length; i++) {
+      if (String(arr[i]).toLowerCase() === v) return true;
+    }
+    return false;
+  }
+  function metricsSet(db, f) {
+    return db.principal.filter(function (p) {
+      if (!mIncludes(f.status, p.statusDemanda || '')) return false;
+      if (!mIncludes(f.reg, p.codreg || '')) return false;
+      if (!mIncludes(f.serv, p.codserv || '')) return false;
+      if (!mIncludesCI(f.user, mOwner(p) || '')) return false;
+      if (!mInPeriod(p, f.ini, f.fim)) return false;
+      return true;
     });
-    return out;
   }
   function mUserRole(email) {
     try {
@@ -1400,9 +1440,174 @@
     } catch (e) {}
     return isAdminEmail(email) ? 'admin' : 'usuario';
   }
+  // ---------- multi-select dos filtros de métricas ----------
+  var mselState = {};
+  function mselInit(id, cfg) {
+    var root = $(id);
+    if (!root || mselState[id]) return;
+    cfg = cfg || {};
+    mselState[id] = {
+      options: [], selected: [], query: '',
+      search: !!cfg.search,
+      placeholder: cfg.placeholder || 'Todos',
+      selNoun: cfg.selNoun || 'selecionados',
+      onChange: cfg.onChange || function () {}
+    };
+    root.innerHTML =
+      '<button type="button" class="msel-btn" aria-haspopup="true" aria-expanded="false">' +
+        '<span class="msel-label is-empty">' + esc(cfg.placeholder || 'Todos') + '</span>' +
+        '<span class="msel-chev">' + SADICON('chevron-down', 14) + '</span>' +
+      '</button>' +
+      '<div class="msel-panel" hidden>' +
+        (cfg.search ? '<div class="msel-search"><input type="text" placeholder="Buscar…" autocomplete="off"></div>' : '') +
+        '<div class="msel-list" role="listbox" aria-multiselectable="true"></div>' +
+        '<div class="msel-foot">' +
+          '<button type="button" data-msel-all>Marcar todos</button>' +
+          '<button type="button" data-msel-none>Limpar</button>' +
+        '</div>' +
+      '</div>';
+    var btn = root.querySelector('.msel-btn');
+    var panel = root.querySelector('.msel-panel');
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      mselToggle(id);
+    });
+    panel.addEventListener('click', function (e) { e.stopPropagation(); });
+    if (cfg.search) {
+      var inp = panel.querySelector('.msel-search input');
+      inp.addEventListener('input', function () {
+        mselState[id].query = inp.value || '';
+        mselRenderList(id);
+      });
+    }
+    panel.querySelector('[data-msel-all]').addEventListener('click', function () {
+      var st = mselState[id];
+      st.selected = st.options.map(function (o) { return o.value; });
+      mselRenderList(id);
+      mselRenderLabel(id);
+      st.onChange();
+    });
+    panel.querySelector('[data-msel-none]').addEventListener('click', function () {
+      var st = mselState[id];
+      st.selected = [];
+      mselRenderList(id);
+      mselRenderLabel(id);
+      st.onChange();
+    });
+  }
+  function mselCloseAll(except) {
+    Object.keys(mselState).forEach(function (id) {
+      if (id === except) return;
+      var root = $(id);
+      if (!root) return;
+      root.classList.remove('open');
+      var panel = root.querySelector('.msel-panel');
+      if (panel) panel.hidden = true;
+      var btn = root.querySelector('.msel-btn');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+  function mselToggle(id) {
+    var st = mselState[id], root = $(id);
+    if (!st || !root) return;
+    var panel = root.querySelector('.msel-panel');
+    var btn = root.querySelector('.msel-btn');
+    var open = panel.hidden;
+    mselCloseAll(id);
+    panel.hidden = !open;
+    root.classList.toggle('open', open);
+    if (btn) {
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      // Vira o dropdown para a esquerda quando não couber à direita.
+      var br = btn.getBoundingClientRect();
+      var need = Math.max(220, br.width);
+      root.classList.toggle('msel-flip', br.left + need > window.innerWidth - 8);
+    }
+    if (open) {
+      mselRenderList(id);
+      var inp = root.querySelector('.msel-search input');
+      if (inp) { try { inp.focus(); } catch (e) {} }
+    }
+  }
+  function mselRenderList(id) {
+    var st = mselState[id], root = $(id);
+    if (!st || !root) return;
+    var list = root.querySelector('.msel-list');
+    if (!list) return;
+    var q = String(st.query || '').toLowerCase();
+    var rows = st.options.filter(function (o) {
+      return !q || String(o.label).toLowerCase().indexOf(q) !== -1;
+    });
+    if (!rows.length) {
+      list.innerHTML = '<div class="msel-empty">' + (st.options.length ? 'Nada encontrado.' : 'Sem opções.') + '</div>';
+      return;
+    }
+    var scroll = list.scrollTop;
+    list.innerHTML = rows.map(function (o) {
+      var on = st.selected.indexOf(o.value) !== -1;
+      return '<button type="button" class="msel-opt' + (on ? ' on' : '') + '" role="option" aria-selected="' + (on ? 'true' : 'false') + '" data-val="' + esc(o.value) + '" title="' + esc(o.label) + '">' +
+        '<span class="msel-box"></span><span class="msel-opt-label">' + esc(o.label) + '</span></button>';
+    }).join('');
+    list.scrollTop = scroll;
+    list.querySelectorAll('.msel-opt').forEach(function (opt) {
+      opt.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var val = opt.getAttribute('data-val');
+        var i = st.selected.indexOf(val);
+        if (i === -1) st.selected.push(val); else st.selected.splice(i, 1);
+        mselRenderList(id);
+        mselRenderLabel(id);
+        st.onChange();
+      });
+    });
+  }
+  function mselRenderLabel(id) {
+    var st = mselState[id], root = $(id);
+    if (!st || !root) return;
+    var lbl = root.querySelector('.msel-label');
+    if (!lbl) return;
+    if (!st.selected.length) {
+      lbl.textContent = st.placeholder;
+      lbl.classList.add('is-empty');
+      root.classList.remove('has-sel');
+      lbl.title = '';
+      return;
+    }
+    var names = st.selected.map(function (v) {
+      for (var i = 0; i < st.options.length; i++) {
+        if (String(st.options[i].value) === String(v)) return st.options[i].label;
+      }
+      return v;
+    });
+    lbl.textContent = names.length === 1 ? names[0] : names.length + ' ' + st.selNoun;
+    lbl.title = names.join(', ');
+    lbl.classList.remove('is-empty');
+    root.classList.add('has-sel');
+  }
+  function mselSetOptions(id, options, placeholder) {
+    var st = mselState[id];
+    if (!st) return;
+    st.options = options || [];
+    if (placeholder !== undefined) st.placeholder = placeholder;
+    var valid = {};
+    st.options.forEach(function (o) { valid[o.value] = 1; });
+    st.selected = st.selected.filter(function (v) { return valid[v] === 1; });
+    mselRenderList(id);
+    mselRenderLabel(id);
+  }
+  function mselGet(id) {
+    return (mselState[id] && mselState[id].selected) ? mselState[id].selected.slice() : [];
+  }
+  function mselSetSelected(id, values) {
+    var st = mselState[id];
+    if (!st) return;
+    st.selected = (values || []).slice();
+    mselRenderList(id);
+    mselRenderLabel(id);
+  }
   function populateMUser(db) {
-    var sel = $('m-user');
-    if (!sel) return;
     var seen = {}, order = [];
     function add(e) {
       e = String(e || '').trim();
@@ -1413,93 +1618,371 @@
     try {
       if (typeof getUsers === 'function') getUsers().forEach(function (u) { add(u.email); });
     } catch (e) {}
-    db.principal.forEach(function (p) { add(p.encerradoPor); add(p.responsavel); });
+    db.principal.forEach(function (p) {
+      add(p.responsavel); add(p.encerradoPor); add(p.despachadoPor);
+    });
     order.sort();
-    var cur = state.metrics.user || '';
-    sel.innerHTML = '<option value="">Todos</option>' + order.map(function (e) {
-      return '<option value="' + esc(e) + '">' + esc(e) + '</option>';
-    }).join('');
-    sel.value = cur;
+    mselSetOptions('m-user', order.map(function (e) { return { value: e, label: e }; }), 'Todos');
+  }
+  function populateMServ(db) {
+    var set = {}, order = [];
+    db.principal.forEach(function (p) {
+      var c = String(p.codserv || '').trim();
+      if (!c) return;
+      if (!set[c]) { set[c] = 1; order.push(c); }
+    });
+    order.sort(function (a, b) { return Number(a) - Number(b); });
+    mselSetOptions('m-serv', order.map(function (c) { return { value: c, label: c }; }), 'Todos');
+  }
+  function syncMDateInputs(r) {
+    var di = $('m-dini'), df = $('m-dfim');
+    if (state.metrics.preset !== 'custom') {
+      if (di) di.value = r.ini;
+      if (df) df.value = r.fim;
+      return;
+    }
+    // Personalizado sem datas ainda preenchidas: parte do período atual.
+    if (di && !di.value) di.value = r.ini;
+    if (df && !df.value) df.value = r.fim;
+  }
+  function chartEmpty(msg) {
+    return '<div class="chart-empty">' + SADICON('chart', 30) + '<span>' + esc(msg) + '</span></div>';
+  }
+  function chartLegend(series) {
+    return '<div class="chart-legend">' + series.map(function (s) {
+      return '<span><i style="background:' + s.color + '"></i>' + esc(s.label) + '</span>';
+    }).join('') + '</div>';
+  }
+  function fmtAxis(v) {
+    if (Math.abs(v - Math.round(v)) < 0.001) return String(Math.round(v));
+    return String(Math.round(v * 10) / 10).replace('.', ',');
+  }
+  function svgLineChart(buckets, series) {
+    var W = 760, H = 250, padL = 42, padR = 14, padT = 16, padB = 36;
+    var iw = W - padL - padR, ih = H - padT - padB;
+    var n = buckets.length, max = 0;
+    series.forEach(function (s) {
+      s.values.forEach(function (v) { if (v > max) max = v; });
+    });
+    if (!n || !max) return '';
+    var ticks = 4, step;
+    if (max <= 8) {
+      step = Math.ceil(max / ticks);
+    } else {
+      var raw = max / ticks, pow = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+      var q = raw / pow;
+      var mult = q <= 1 ? 1 : q <= 1.5 ? 1.5 : q <= 2 ? 2 : q <= 3 ? 3 : q <= 4 ? 4 : q <= 5 ? 5 : 10;
+      step = mult * pow;
+    }
+    var yMax = step * ticks;
+    function X(i) { return n === 1 ? padL + iw / 2 : padL + (iw * i) / (n - 1); }
+    function Y(v) { return padT + ih - (v / yMax) * ih; }
+    var svg = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Evolução diária">';
+    for (var t = 0; t <= ticks; t++) {
+      var yv = step * t, yy = Y(yv);
+      svg += '<line class="chart-grid-line" x1="' + padL + '" y1="' + yy + '" x2="' + (W - padR) + '" y2="' + yy + '"/>';
+      svg += '<text class="chart-axis-text" x="' + (padL - 8) + '" y="' + (yy + 3.5) + '" text-anchor="end">' + fmtAxis(yv) + '</text>';
+    }
+    var labelIdx = {};
+    if (n <= 10) { for (var li = 0; li < n; li++) labelIdx[li] = 1; }
+    else {
+      var want = 8;
+      for (var lk = 0; lk < want; lk++) labelIdx[Math.round((n - 1) * lk / (want - 1))] = 1;
+    }
+    Object.keys(labelIdx).forEach(function (ki) {
+      var i = +ki;
+      svg += '<text class="chart-axis-text" x="' + X(i).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle">' + esc(buckets[i].label) + '</text>';
+    });
+    series.forEach(function (s, si) {
+      var pts = s.values.map(function (v, i) { return [X(i), Y(v)]; });
+      var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+      if (si === 0) {
+        var area = 'M' + pts[0][0].toFixed(1) + ' ' + Y(0).toFixed(1) + ' ' +
+          pts.map(function (p) { return 'L' + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ') +
+          ' L' + pts[n - 1][0].toFixed(1) + ' ' + Y(0).toFixed(1) + ' Z';
+        svg += '<path d="' + area + '" style="fill:' + s.color + ';opacity:.10"/>';
+      }
+      svg += '<path d="' + d + '" fill="none" style="stroke:' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+      if (n <= 40) {
+        pts.forEach(function (p, i) {
+          svg += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" style="fill:' + s.color + ';stroke:var(--surface)" stroke-width="1.5"><title>' +
+            esc(buckets[i].full + ' · ' + s.label + ': ' + s.values[i]) + '</title></circle>';
+        });
+      }
+    });
+    var band = n === 1 ? iw : iw / (n - 1);
+    buckets.forEach(function (b, i) {
+      var bx = X(i) - band / 2, bw = Math.max(band, 6);
+      if (bx < padL) bx = padL;
+      if (bx + bw > W - padR) bw = W - padR - bx;
+      var tip = b.full + '\n' + series.map(function (s) { return s.label + ': ' + s.values[i]; }).join('\n');
+      svg += '<rect x="' + bx.toFixed(1) + '" y="' + padT + '" width="' + bw.toFixed(1) + '" height="' + ih + '" fill="transparent"><title>' + esc(tip) + '</title></rect>';
+    });
+    return svg + '</svg>';
+  }
+  function donutChart(parts, total) {
+    var R = 68, C = 2 * Math.PI * R, off = 0, segs = '';
+    parts.forEach(function (p) {
+      if (!p.value || !total) return;
+      var len = (p.value / total) * C;
+      segs += '<circle cx="100" cy="100" r="' + R + '" fill="none" stroke-width="24" ' +
+        'style="stroke:' + p.color + '" stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '" ' +
+        'stroke-dashoffset="' + (-off).toFixed(2) + '" transform="rotate(-90 100 100)">' +
+        '<title>' + esc(p.label + ': ' + p.value) + '</title></circle>';
+      off += len;
+    });
+    return '<div class="donut-wrap">' +
+      '<svg class="donut-svg" viewBox="0 0 200 200" role="img" aria-label="Distribuição por status">' +
+      '<circle cx="100" cy="100" r="' + R + '" fill="none" stroke-width="24" style="stroke:var(--surface2)"/>' +
+      segs +
+      '<text class="donut-center-num" x="100" y="99" text-anchor="middle">' + total + '</text>' +
+      '<text class="donut-center-lbl" x="100" y="117" text-anchor="middle">OS</text>' +
+      '</svg><div class="donut-legend">' + parts.map(function (p) {
+        var pct = total ? Math.round((p.value / total) * 100) : 0;
+        return '<div class="donut-item"><span class="donut-dot" style="background:' + p.color + '"></span>' +
+          esc(p.label) + '<span class="pct">' + pct + '%</span><b>' + p.value + '</b></div>';
+      }).join('') + '</div></div>';
+  }
+  function stackedBars(rows, max) {
+    if (!rows.length) return '';
+    return '<div class="hbar-list">' + rows.map(function (r) {
+      var w = max ? (r.total / max) * 100 : 0;
+      var segs = r.segs.filter(function (s) { return s.value > 0; }).map(function (s) {
+        return '<span class="hbar-seg" style="width:' + ((s.value / r.total) * 100).toFixed(2) + '%;background:' + s.color + '" title="' +
+          esc(s.label + ': ' + s.value) + '"></span>';
+      }).join('');
+      return '<div class="hbar-row"><div class="hbar-label" title="' + esc(r.label) + '">' + esc(r.label) + '</div>' +
+        '<div class="hbar-track"><div class="hbar-stack" style="width:' + w.toFixed(1) + '%">' + segs + '</div></div>' +
+        '<div class="hbar-value">' + r.total + '</div></div>';
+    }).join('') + '</div>';
+  }
+  function mDayBuckets(ini, fim) {
+    var buckets = [], count = 0, t = ini, guard = 0;
+    while (t <= fim && guard < 5000) { count++; t = addDaysStr(t, 1); guard++; }
+    var weekly = count > 62;
+    if (weekly) {
+      var start = ini;
+      while (start <= fim && buckets.length < 160) {
+        var end = addDaysStr(start, 6);
+        if (end > fim) end = fim;
+        buckets.push({
+          start: start, end: end,
+          label: fmtDayShort(start) + (end !== start ? '–' + fmtDayShort(end) : ''),
+          full: fmtDayBR(start) + (end !== start ? ' → ' + fmtDayBR(end) : '')
+        });
+        start = addDaysStr(end, 1);
+      }
+    } else {
+      var d = ini;
+      while (d <= fim) {
+        buckets.push({ start: d, end: d, label: fmtDayShort(d), full: fmtDayBR(d) });
+        d = addDaysStr(d, 1);
+      }
+    }
+    return { buckets: buckets, weekly: weekly, days: count };
   }
   function renderMetricas() {
     if (!state.isAdmin) return;
     var db = loadDB();
     populateMUser(db);
+    populateMServ(db);
     var r = mRange();
-    var list = mEncerradas(db, r.ini, r.fim, '');
-    // KPIs
-    var ativos = {}, maos = 0;
-    list.forEach(function (e) {
-      var k = String(e.por || '').toLowerCase();
-      if (k) ativos[k] = 1;
+    syncMDateInputs(r);
+    var f = {
+      ini: r.ini, fim: r.fim,
+      user: mselGet('m-user'),
+      status: mselGet('m-status'),
+      reg: mselGet('m-reg'),
+      serv: mselGet('m-serv')
+    };
+    state.metrics.user = f.user;
+    state.metrics.status = f.status;
+    state.metrics.reg = f.reg;
+    state.metrics.serv = f.serv;
+    var set = metricsSet(db, f);
+    // Contagens por status
+    var byStatus = {};
+    M_STATUS.forEach(function (s) { byStatus[s.key] = 0; });
+    set.forEach(function (p) {
+      if (byStatus[p.statusDemanda] !== undefined) byStatus[p.statusDemanda]++;
     });
-    db.principal.forEach(function (p) { if (!isFinalStatus(p.statusDemanda)) maos++; });
-    if ($('m-k-total')) $('m-k-total').textContent = list.length;
-    if ($('m-k-range')) $('m-k-range').textContent = r.ini === r.fim ? r.ini : r.ini + ' → ' + r.fim;
-    if ($('m-k-ativos')) $('m-k-ativos').textContent = Object.keys(ativos).length;
+    var enc = byStatus['ENCERRADO'], dsp = byStatus['DESPACHADO'];
+    var maos = byStatus['A INICIAR'] + byStatus['EM ANDAMENTO'];
+    var oco = byStatus['OCORRENCIA'];
+    var owners = {};
+    set.forEach(function (p) {
+      var o = String(mOwner(p) || '').trim();
+      if (o) owners[o.toLowerCase()] = 1;
+    });
+    if ($('m-k-total')) $('m-k-total').textContent = set.length;
+    if ($('m-k-enc')) $('m-k-enc').textContent = enc;
+    if ($('m-k-dsp')) $('m-k-dsp').textContent = dsp;
     if ($('m-k-maos')) $('m-k-maos').textContent = maos;
-    if ($('m-range-label')) $('m-range-label').textContent = 'Período: ' + r.ini + ' → ' + r.fim + ' • fonte: OS com ENCERRADO datado (itens antigos sem data não entram no período).';
-    // Por usuário: todas as contas + quem tem produção fora do cadastro
+    if ($('m-k-oco')) $('m-k-oco').textContent = oco;
+    if ($('m-k-users')) $('m-k-users').textContent = Object.keys(owners).length;
+    var lbl = 'Período: ' + (r.ini === r.fim ? fmtDayBR(r.ini) : fmtDayBR(r.ini) + ' → ' + fmtDayBR(r.fim)) +
+      ' • o período recorta encerradas/despachadas pela data do evento; OS em aberto entram como situação atual.';
+    if (f.user.length) lbl += ' • usuário: ' + (f.user.length <= 2 ? f.user.join(', ') : f.user.length + ' selecionados');
+    if (f.status.length) {
+      var stNames = f.status.map(function (k) {
+        for (var si = 0; si < M_STATUS.length; si++) {
+          if (M_STATUS[si].key === k) return M_STATUS[si].label;
+        }
+        return k;
+      });
+      lbl += ' • status: ' + (stNames.length <= 2 ? stNames.join(', ') : stNames.length + ' selecionados');
+    }
+    if (f.reg.length) lbl += ' • regional: ' + (f.reg.length <= 2 ? f.reg.join(', ') : f.reg.length + ' selecionadas');
+    if (f.serv.length) lbl += ' • serviço: ' + (f.serv.length <= 2 ? f.serv.join(', ') : f.serv.length + ' selecionados');
+    if ($('m-range-label')) $('m-range-label').textContent = lbl;
+    // ---- Evolução diária (encerradas × despachadas) ----
+    var bucketInfo = mDayBuckets(r.ini, r.fim);
+    var encArr = [], dspArr = [], bi;
+    for (bi = 0; bi < bucketInfo.buckets.length; bi++) { encArr.push(0); dspArr.push(0); }
+    var dayIndex = {};
+    bucketInfo.buckets.forEach(function (b, i) {
+      var d = b.start;
+      while (d <= b.end) { dayIndex[d] = i; d = addDaysStr(d, 1); }
+    });
+    set.forEach(function (p) {
+      if (p.statusDemanda !== 'ENCERRADO' && p.statusDemanda !== 'DESPACHADO') return;
+      var dk = mEventDay(p), i = dayIndex[dk];
+      if (i === undefined) return;
+      if (p.statusDemanda === 'ENCERRADO') encArr[i]++; else dspArr[i]++;
+    });
+    var totalEvents = 0;
+    for (bi = 0; bi < encArr.length; bi++) totalEvents += encArr[bi] + dspArr[bi];
+    var chartDay = $('m-chart-day');
+    if (chartDay) {
+      if (!totalEvents) {
+        var onlyOpen = f.status.length > 0 && f.status.indexOf('ENCERRADO') === -1 && f.status.indexOf('DESPACHADO') === -1;
+        var noEvt = onlyOpen
+          ? 'Os status selecionados não têm data de evento (encerramento/despacho) para montar a série diária.'
+          : 'Nenhuma OS encerrada ou despachada no período com os filtros atuais.';
+        chartDay.innerHTML = chartEmpty(noEvt);
+      } else {
+        var daySeries = [
+          { label: 'Encerradas', color: 'var(--green)', values: encArr },
+          { label: 'Despachadas', color: 'var(--purple)', values: dspArr }
+        ];
+        chartDay.innerHTML = svgLineChart(bucketInfo.buckets, daySeries) + chartLegend(daySeries);
+      }
+    }
+    if ($('m-chart-day-step')) {
+      $('m-chart-day-step').textContent = bucketInfo.weekly ? 'agrupado por semana' : (bucketInfo.days === 1 ? '1 dia' : bucketInfo.days + ' dias');
+    }
+    if ($('m-chart-day-sub')) $('m-chart-day-sub').textContent = 'Encerradas e despachadas por ' + (bucketInfo.weekly ? 'semana' : 'dia');
+    // ---- Por status (donut) ----
+    var statusParts = M_STATUS.map(function (s) { return { label: s.label, color: s.color, value: byStatus[s.key] || 0 }; });
+    var cs = $('m-chart-status');
+    if (cs) cs.innerHTML = set.length ? donutChart(statusParts, set.length) : chartEmpty('Sem OS para os filtros atuais.');
+    // ---- Agregação por usuário ----
     var agg = {};
     function row(email, role) {
-      var k = String(email).toLowerCase();
-      if (!agg[k]) agg[k] = { email: email, role: role, enc: 0, maos: 0, total: 0 };
+      var k = String(email || '').toLowerCase();
+      if (!agg[k]) agg[k] = { email: email, role: role, total: 0, by: {} };
       return agg[k];
     }
     try {
       if (typeof getUsers === 'function') getUsers().forEach(function (u) { row(u.email, u.role); });
     } catch (e) {}
-    list.forEach(function (e) {
-      if (!e.por) return;
-      row(e.por, mUserRole(e.por)).enc++;
-    });
-    db.principal.forEach(function (p) {
-      if (!p.responsavel) return;
-      if (p.statusDemanda === 'DESPACHADO') return; // já saiu da caixa principal
-      var g = row(p.responsavel, mUserRole(p.responsavel));
+    set.forEach(function (p) {
+      var o = String(mOwner(p) || '').trim();
+      if (!o) return;
+      var g = row(o, mUserRole(o));
       g.total++;
-      if (!isFinalStatus(p.statusDemanda)) g.maos++;
+      g.by[p.statusDemanda] = (g.by[p.statusDemanda] || 0) + 1;
     });
-    var rows = Object.keys(agg).map(function (k) { return agg[k]; });
-    rows.sort(function (a, b) { return b.enc - a.enc || b.total - a.total || (a.email < b.email ? -1 : 1); });
+    var rows = Object.keys(agg).map(function (k) {
+      var g = agg[k];
+      g.enc = g.by['ENCERRADO'] || 0;
+      g.dsp = g.by['DESPACHADO'] || 0;
+      g.oco = g.by['OCORRENCIA'] || 0;
+      g.maos = (g.by['A INICIAR'] || 0) + (g.by['EM ANDAMENTO'] || 0);
+      g.segs = M_STATUS.map(function (s) { return { label: s.label, color: s.color, value: g.by[s.key] || 0 }; });
+      return g;
+    });
+    rows.sort(function (a, b) {
+      return b.total - a.total || b.enc - a.enc || (a.email < b.email ? -1 : 1);
+    });
+    // ---- Gráfico por usuário (top 12) ----
+    var chartUsers = rows.filter(function (g) { return g.total > 0; }).slice(0, 12);
+    var maxUser = 0;
+    chartUsers.forEach(function (g) { if (g.total > maxUser) maxUser = g.total; });
+    var cu = $('m-chart-user');
+    if (cu) cu.innerHTML = chartUsers.length
+      ? stackedBars(chartUsers.map(function (g) { return { label: g.email, total: g.total, segs: g.segs }; }), maxUser) + chartLegend(M_STATUS)
+      : chartEmpty('Sem OS para os filtros atuais.');
+    // ---- Por regional ----
+    var regMap = { '1': 0, '2': 0, '3': 0, '': 0 };
+    set.forEach(function (p) { var k = String(p.codreg || ''); regMap[k] = (regMap[k] || 0) + 1; });
+    var regRows = [
+      { label: '1 · Leste', total: regMap['1'], segs: [{ label: 'OS', color: 'var(--blue)', value: regMap['1'] }] },
+      { label: '2 · Centro', total: regMap['2'], segs: [{ label: 'OS', color: 'var(--yellow)', value: regMap['2'] }] },
+      { label: '3 · Oeste', total: regMap['3'], segs: [{ label: 'OS', color: 'var(--purple)', value: regMap['3'] }] }
+    ];
+    if (regMap['']) regRows.push({ label: 'Sem regional', total: regMap[''], segs: [{ label: 'OS', color: 'var(--text3)', value: regMap[''] }] });
+    var maxReg = 0;
+    regRows.forEach(function (x) { if (x.total > maxReg) maxReg = x.total; });
+    var cr = $('m-chart-reg');
+    if (cr) cr.innerHTML = set.length ? stackedBars(regRows, maxReg) : chartEmpty('Sem OS para os filtros atuais.');
+    // ---- Top serviços ----
+    var servMap = {};
+    set.forEach(function (p) {
+      var c = String(p.codserv || '').trim() || '—';
+      servMap[c] = (servMap[c] || 0) + 1;
+    });
+    var servRows = Object.keys(servMap).map(function (c) {
+      return { label: c, total: servMap[c], segs: [{ label: 'OS', color: 'var(--accent)', value: servMap[c] }] };
+    }).sort(function (a, b) { return b.total - a.total || (a.label < b.label ? -1 : 1); }).slice(0, 10);
+    var maxServ = servRows.length ? servRows[0].total : 0;
+    var cse = $('m-chart-serv');
+    if (cse) cse.innerHTML = servRows.length ? stackedBars(servRows, maxServ) : chartEmpty('Sem OS para os filtros atuais.');
+    // ---- Tabela por usuário ----
     var hu = $('m-tbl-user');
     if (hu) {
       if (!rows.length) {
         hu.innerHTML = '<div class="no-results"><div class="big">' + SADICON('chart', 38) + '</div>Sem dados.<br>Cadastre usuários e importe OS para ver as métricas.</div>';
       } else {
         var h = '<div class="table-wrap"><table><thead><tr>' +
-          '<th>Usuário</th><th>Perfil</th><th>Encerradas (período)</th><th>Em mãos</th><th>Total na caixa</th><th></th>' +
+          '<th>Usuário</th><th>Perfil</th><th>Total no filtro</th><th>Encerradas</th><th>Despachadas</th><th>Em mãos</th><th>Ocorrências</th><th></th>' +
           '</tr></thead><tbody>';
         rows.forEach(function (g) {
           h += '<tr><td class="mono">' + esc(g.email) + '</td>' +
             '<td>' + (g.role === 'admin' ? '<span class="badge badge-yellow">ADMIN</span>' : '<span class="badge badge-gray">USUÁRIO</span>') + '</td>' +
-            '<td><span class="badge badge-green">' + g.enc + '</span></td>' +
-            '<td class="mono"><b>' + g.maos + '</b></td>' +
-            '<td class="mono">' + g.total + '</td>' +
+            '<td class="mono"><b>' + g.total + '</b></td>' +
+            '<td><span class="badge ' + (g.enc ? 'badge-green' : 'badge-gray') + '">' + g.enc + '</span></td>' +
+            '<td><span class="badge ' + (g.dsp ? 'badge-purple' : 'badge-gray') + '">' + g.dsp + '</span></td>' +
+            '<td class="mono">' + g.maos + '</td>' +
+            '<td><span class="badge ' + (g.oco ? 'badge-red' : 'badge-gray') + '">' + g.oco + '</span></td>' +
             '<td style="white-space:nowrap"><button class="btn-small" data-act="ver-os" data-email="' + esc(g.email) + '">Ver OS</button></td></tr>';
         });
         hu.innerHTML = h + '</tbody></table></div>';
       }
     }
-    // Por dia (respeita o filtro de usuário)
-    var mu = state.metrics.user || '';
-    var dayList = mu ? mEncerradas(db, r.ini, r.fim, mu) : list;
-    var perDay = {}, d = r.ini, guard = 0;
-    while (d <= r.fim && guard < 366) { perDay[d] = 0; d = addDaysStr(d, 1); guard++; }
-    dayList.forEach(function (e) { if (perDay[e.dia] !== undefined) perDay[e.dia]++; });
-    var days = Object.keys(perDay).sort().reverse();
+    // ---- Tabela por dia/semana ----
     var hd = $('m-tbl-day');
     if (hd) {
-      var hh = '<div class="table-wrap"><table style="min-width:320px"><thead><tr><th>Dia</th><th>Encerradas</th></tr></thead><tbody>';
-      days.forEach(function (dd) {
-        hh += '<tr><td class="mono">' + esc(dd) + '</td><td><span class="badge ' + (perDay[dd] ? 'badge-green' : 'badge-gray') + '">' + perDay[dd] + '</span></td></tr>';
-      });
-      hd.innerHTML = hh + '</tbody></table></div>' +
-        (guard >= 366 ? '<div class="panel-hint">Período limitado a 366 dias na tabela.</div>' : '');
+      if (!bucketInfo.buckets.length) {
+        hd.innerHTML = chartEmpty('Sem período válido.');
+      } else {
+        var hh = '<div class="table-wrap"><table style="min-width:420px"><thead><tr><th>' + (bucketInfo.weekly ? 'Semana' : 'Dia') +
+          '</th><th>Encerradas</th><th>Despachadas</th><th>Total</th></tr></thead><tbody>';
+        for (var bi2 = bucketInfo.buckets.length - 1; bi2 >= 0; bi2--) {
+          var b = bucketInfo.buckets[bi2], te = encArr[bi2], td = dspArr[bi2];
+          hh += '<tr><td class="mono">' + esc(b.full) + '</td>' +
+            '<td><span class="badge ' + (te ? 'badge-green' : 'badge-gray') + '">' + te + '</span></td>' +
+            '<td><span class="badge ' + (td ? 'badge-purple' : 'badge-gray') + '">' + td + '</span></td>' +
+            '<td class="mono">' + (te + td) + '</td></tr>';
+        }
+        hd.innerHTML = hh + '</tbody></table></div>' +
+          (bucketInfo.weekly ? '<div class="panel-hint">Período longo: tabela agrupada por semana.</div>' : '');
+      }
     }
-    var ds = $('m-day-sub');
-    if (ds) ds.textContent = 'Encerradas por dia no período' + (mu ? ' · ' + mu : ' · todos');
-    state.metrics._rows = rows;
+    if ($('m-day-sub')) $('m-day-sub').textContent = 'Encerradas e despachadas por ' + (bucketInfo.weekly ? 'semana' : 'dia') + ' no período' + (f.user ? ' · ' + f.user : ' · todos');
+    state.metrics._rows = rows.map(function (g) {
+      return { email: g.email, role: g.role, enc: g.enc, dsp: g.dsp, maos: g.maos, oco: g.oco, total: g.total };
+    });
     state.metrics._range = r;
   }
   function exportMetricasCSV() {
@@ -1509,9 +1992,9 @@
       v = String(v == null ? '' : v);
       return (/[";\n\r]/.test(v)) ? '"' + v.replace(/"/g, '""') + '"' : v;
     }
-    var cols = ['USUARIO', 'PERFIL', 'ENCERRADAS_PERIODO', 'EM_MAOS', 'TOTAL_CAIXA'];
+    var cols = ['USUARIO', 'PERFIL', 'TOTAL_NO_FILTRO', 'ENCERRADAS', 'DESPACHADAS', 'EM_MAOS', 'OCORRENCIAS'];
     var txt = '\uFEFF' + cols.join(';') + '\r\n' + rows.map(function (g) {
-      return [g.email, g.role, g.enc, g.maos, g.total].map(cell).join(';');
+      return [g.email, g.role, g.total, g.enc, g.dsp, g.maos, g.oco].map(cell).join(';');
     }).join('\r\n');
     downloadBlob(new Blob([txt], { type: 'text/csv;charset=utf-8' }), 'metricas_' + r.ini + '_' + r.fim + '.csv');
   }
@@ -2042,7 +2525,13 @@
     // métricas do admin (presets + personalizado + usuário + export)
     document.querySelectorAll('.chip[data-mp]').forEach(function (c) {
       c.addEventListener('click', function () {
-        state.metrics.preset = c.getAttribute('data-mp');
+        var mp = c.getAttribute('data-mp');
+        if (mp === 'custom') {
+          var cur = mRange(); // período atual antes de trocar para personalizado
+          state.metrics.dini = cur.ini;
+          state.metrics.dfim = cur.fim;
+        }
+        state.metrics.preset = mp;
         document.querySelectorAll('.chip[data-mp]').forEach(function (x) {
           x.classList.toggle('active', x === c);
         });
@@ -2062,9 +2551,41 @@
         renderMetricas();
       });
     });
-    var mus = $('m-user');
-    if (mus) mus.addEventListener('change', function () {
-      state.metrics.user = mus.value || '';
+    // filtros múltiplos de métricas (dropdown com checkboxes)
+    mselInit('m-user', { search: true, placeholder: 'Todos', onChange: renderMetricas });
+    mselInit('m-status', { search: false, placeholder: 'Todos', onChange: renderMetricas });
+    mselInit('m-reg', { search: false, placeholder: 'Todas', selNoun: 'selecionadas', onChange: renderMetricas });
+    mselInit('m-serv', { search: true, placeholder: 'Todos', onChange: renderMetricas });
+    mselSetOptions('m-status', M_STATUS.map(function (s) { return { value: s.key, label: s.label }; }), 'Todos');
+    mselSetOptions('m-reg', [
+      { value: '1', label: '1 · Leste' },
+      { value: '2', label: '2 · Centro' },
+      { value: '3', label: '3 · Oeste' }
+    ], 'Todas');
+    document.addEventListener('click', function () { mselCloseAll(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') mselCloseAll();
+    });
+    var mreset = $('m-reset');
+    if (mreset) mreset.addEventListener('click', function () {
+      state.metrics.preset = 'hoje';
+      state.metrics.dini = '';
+      state.metrics.dfim = '';
+      state.metrics.user = [];
+      state.metrics.status = [];
+      state.metrics.reg = [];
+      state.metrics.serv = [];
+      mselSetSelected('m-user', []);
+      mselSetSelected('m-status', []);
+      mselSetSelected('m-reg', []);
+      mselSetSelected('m-serv', []);
+      ['m-dini', 'm-dfim'].forEach(function (id) {
+        var el = $(id);
+        if (el) el.value = '';
+      });
+      document.querySelectorAll('.chip[data-mp]').forEach(function (x) {
+        x.classList.toggle('active', x.getAttribute('data-mp') === 'hoje');
+      });
       renderMetricas();
     });
     var mex = $('m-export');
