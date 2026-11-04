@@ -499,12 +499,34 @@
         dupQ++;
       });
     }
-    // Conflitos: mesmo NUMOS, codserv diferente → quarentena DIVERGENTE (revisar lado a lado)
+    // Conflitos: mesmo NUMOS, codserv diferente → quarentena DIVERGENTE (revisar lado a lado).
+    // Mesmo quando a OS JÁ está na caixa, o conflito vai para a aba Conflitos: antes
+    // ele era só ignorado, então o modal/contador anunciavam a divergência mas a
+    // aba ficava vazia (e não havia como revisar o serviço daquela OS na caixa).
+    // Se o admin já escolheu um lado (origem CONFLITO_SIATE/LIST) e o valor da
+    // caixa continua igual a um dos lados, o conflito não é reaberto a cada importação.
     var newDiv = 0, skipDivRep = 0;
     (cmp.confl || []).forEach(function (pair) {
       var numos = pair.s.numos;
-      if (haveP[numos]) { keptP++; if (haveP[numos].statusDemanda === 'ENCERRADO') closedP++; return; } // já na caixa: preserva, sem duplicar
       var key = numos + '|DIVERGENTE';
+      // O par agora existe nas DUAS bases: limpa um eventual SÓ SIATE/SÓ LIST
+      // antigo do mesmo NUMOS (senão a mesma OS apareceria em duas abas).
+      for (var qi = db.quarentena.length - 1; qi >= 0; qi--) {
+        var qx = db.quarentena[qi];
+        if (qx.numos === numos && (qx.origem === 'SO_SIATE' || qx.origem === 'SO_LIST')) {
+          db.quarentena.splice(qi, 1);
+          delete haveQ[qx.numos + '|' + qx.origem];
+        }
+      }
+      var pBox = haveP[numos];
+      if (pBox) {
+        keptP++;
+        if (pBox.statusDemanda === 'ENCERRADO') closedP++;
+        var escolhido = String(pBox.origem || '').indexOf('CONFLITO_') === 0 &&
+          (String(pBox.codserv || '') === String(pair.s.codserv || '') ||
+            String(pBox.codserv || '') === String(pair.l.codserv || ''));
+        if (escolhido) return; // lado já escolhido numa revisão anterior: não reabre
+      }
       if (haveQ[key]) return;
       if (reprovedSet[key]) { skipDivRep++; return; }
       var dd = compactDiv(pair);
@@ -1090,6 +1112,8 @@
       hq = '<div class="table-wrap"><table><thead><tr>' +
         '<th>NUM OS</th><th>ORIGEM</th><th>MOTIVO</th><th>DETALHE</th><th>AÇÕES (admin)</th>' +
         '</tr></thead><tbody>';
+      var inBox = {};
+      db.principal.forEach(function (pb) { inBox[String(pb.numos)] = pb; });
       sliceQ.forEach(function (x) {
         var det = '';
         var isDiv = x.origem === 'DIVERGENTE';
@@ -1100,6 +1124,9 @@
           det = 'SIATE serv <b>' + esc(dd.cs || '—') + '</b> × LIST serv <b>' + esc(dd.cl || '—') + '</b>' +
             '<br><span class="mono" style="font-size:11px">data ' + esc(dd.ds || '—') + ' × ' + esc(dd.dl || '—') +
             ' • ' + esc(dd.cid || dd.loc || '—') + ' • ' + esc(dd.cli || dd.desc || '') + '</span>';
+          if (inBox[String(x.numos)]) {
+            det += '<br><span style="font-size:11px;color:var(--yellow)">já está na caixa — escolher um lado atualiza os dados da OS (status e responsável são mantidos)</span>';
+          }
         } else {
           det = 'CODSERV ' + esc(qget(x, 'c') || '—') + ' • ' + esc(qget(x, 'cid') || qget(x, 'loc')) + ' • ' + esc(qget(x, 'cli')) + ' • REG ' + esc(qget(x, 'r') || '—');
         }
@@ -1200,8 +1227,9 @@
     if (ix === -1) return;
     var item = db.quarentena.splice(ix, 1)[0];
     var d = item.d || {};
-    if (!db.principal.find(function (p) { return p.numos === os; })) {
-      var useS = side === 'SIATE';
+    var useS = side === 'SIATE';
+    var p = db.principal.find(function (x) { return x.numos === os; });
+    if (!p) {
       db.principal.push({
         numos: os,
         codserv: useS ? (d.cs || '') : (d.cl || ''),
@@ -1213,9 +1241,30 @@
         statusDemanda: 'A INICIAR', responsavel: null, origem: 'CONFLITO_' + side,
         createdAt: new Date().toISOString(),
       });
+    } else {
+      // OS já estava na caixa: aplica o lado escolhido aos DADOS, preservando
+      // status, responsável e histórico. A origem CONFLITO_* marca a escolha
+      // para não reabrir o mesmo conflito nas próximas importações.
+      p.origem = 'CONFLITO_' + side;
+      if (useS) {
+        if (d.cs !== undefined && String(d.cs) !== '') p.codserv = d.cs;
+        if (d.ds) p.dataISO = d.ds;
+        if (d.rs) { p.codreg = d.rs; p.regional = REGIONAL_NOME[d.rs] || p.regional; }
+        if (d.cid) p.cidade = d.cid;
+        if (d.cli) p.cliente = d.cli;
+        if (d.ts) p.tel1 = d.ts;
+      } else {
+        if (d.cl !== undefined && String(d.cl) !== '') p.codserv = d.cl;
+        if (d.dl) p.dataISO = d.dl;
+        if (d.loc) p.cidade = d.loc;
+        if (d.cli) p.cliente = d.cli;
+        if (d.desc) p.dscsvc = d.desc;
+        if (d.tl) p.tel1 = d.tl;
+      }
     }
     if (!saveDB(db)) { alert('NÃO SALVOU: banco indisponível (Supabase).'); return; }
-    renderAll('OS ' + os + ' liberada p/ caixa com dados da ' + side + '.');
+    renderAll(p ? 'OS ' + os + ' — dados da caixa atualizados com a ' + side + ' (status/responsável preservados).'
+      : 'OS ' + os + ' liberada p/ caixa com dados da ' + side + '.');
   }
   function removeQuarList(list, archive) {
     var db = loadDB();
