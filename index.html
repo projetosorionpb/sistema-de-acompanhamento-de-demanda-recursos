@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261104a">
+<link rel="stylesheet" href="css/style.css?v=20261106a">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/config.js?v=20261104a"></script>
@@ -350,10 +350,95 @@
 
       <!-- ═══ VIEW: DESPACHADOS (todos) ═══ -->
       <section id="view-despachados" style="display:none">
+        <div class="panel panel-slim">
+          <div class="panel-header">
+            <div class="panel-icon" style="width:30px;height:30px"><span data-icon="filter" data-size="15"></span></div>
+            <div>
+              <div class="panel-title" style="font-size:13px">Filtros de despachados</div>
+            </div>
+            <button class="filters-toggle" id="btn-desp-f-toggle" title="Mostrar/ocultar filtros">
+              Filtros <span class="f2-count" id="desp-f-count">0</span> <span class="filters-chevron" data-icon="chevron-down" data-size="14"></span>
+            </button>
+          </div>
+          <div class="panel-body" id="desp-f-body">
+            <div class="filter-grid">
+              <div class="field">
+                <label>NUM OS</label>
+                <input type="text" id="d-numos" placeholder="Ex: 123456" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>Serviço (CODSERV)</label>
+                <select id="d-codserv"><option value="">Todos</option></select>
+              </div>
+              <div class="field">
+                <label>Cliente</label>
+                <input type="text" id="d-cliente" placeholder="Nome do cliente" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>Cidade</label>
+                <input type="text" id="d-cidade" placeholder="Ex: CAMPINA GRANDE" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>Regional</label>
+                <select id="d-reg"><option value="">Todas</option><option value="1">1 · Leste</option><option value="2">2 · Centro</option><option value="3">3 · Oeste</option></select>
+              </div>
+              <div class="field">
+                <label>Origem</label>
+                <select id="d-origem"><option value="">Todas</option></select>
+              </div>
+              <div class="field">
+                <label>Data SOL — de</label>
+                <input type="date" id="d-dini">
+              </div>
+              <div class="field">
+                <label>Data SOL — até</label>
+                <input type="date" id="d-dfim">
+              </div>
+              <div class="field">
+                <label>Despachado em — de</label>
+                <input type="date" id="d-despcini">
+              </div>
+              <div class="field">
+                <label>Despachado em — até</label>
+                <input type="date" id="d-despfim">
+              </div>
+              <div class="field">
+                <label>Responsável</label>
+                <select id="d-resp"><option value="">Todos</option><option value="__NONE__">Sem responsável</option></select>
+              </div>
+              <div class="field">
+                <label>Despachado por</label>
+                <select id="d-desppor"><option value="">Todos</option><option value="__NONE__">Sem registro</option></select>
+              </div>
+              <div class="field">
+                <label>Ordenar por</label>
+                <select id="d-sort">
+                  <option value="desp-desc">Despacho · mais recentes primeiro</option>
+                  <option value="desp-asc">Despacho · mais antigos primeiro</option>
+                  <option value="data-desc">Data SOL · mais novas primeiro</option>
+                  <option value="data-asc">Data SOL · mais antigas primeiro</option>
+                  <option value="os-desc">NUM OS · maior primeiro</option>
+                  <option value="os-asc">NUM OS · menor primeiro</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Exportar filtrado</label>
+                <div style="display:flex;gap:8px">
+                  <button class="btn-ghost" id="btn-desp-exp-csv" style="padding:8px 10px;font-size:12px;flex:1"><span data-icon="download" data-size="14"></span>CSV</button>
+                  <button class="btn-ghost" id="btn-desp-exp-xlsx" style="padding:8px 10px;font-size:12px;flex:1"><span data-icon="download" data-size="14"></span>XLSX</button>
+                </div>
+              </div>
+            </div>
+            <div class="btn-row" style="margin-top:12px">
+              <button class="btn-ghost" id="btn-desp-f-clear" style="padding:8px 14px;font-size:12px"><span data-icon="x" data-size="14"></span>Limpar filtros</button>
+              <button class="btn-primary" id="btn-desp-export" style="padding:8px 16px;font-size:12px"><span data-icon="download" data-size="14"></span>&nbsp;Baixar planilha</button>
+            </div>
+          </div>
+        </div>
         <div class="search-bar">
           <div class="search-input-wrap">
             <span class="search-icon" data-icon="search" data-size="16"></span>
-            <input type="text" id="q-desp" placeholder="Buscar por NUM OS, cliente, cidade, responsável…" autocomplete="off">
+            <input type="text" id="q-desp" placeholder="Busca geral: NUM OS, cliente, cidade, serviço, obs, telefone, responsável…" autocomplete="off">
           </div>
         </div>
         <div class="panel">
@@ -364,6 +449,7 @@
               <div class="panel-subtitle">OS despachadas — saíram da caixa principal</div>
             </div>
             <span class="panel-step" id="desp-count">0 despachada(s)</span>
+            <button class="btn-small" id="btn-desp-export-top" style="margin-left:8px" title="Baixar planilha XLSX com os filtros atuais"><span data-icon="download" data-size="13"></span> Planilha</button>
           </div>
           <div class="panel-body" id="tbl-despachados"></div>
         </div>
@@ -664,7 +750,7 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261104a"></script>
+<script src="js/app.js?v=20261106a"></script>
 <script>
   // Drawer mobile (navegação das views fica no app.js via window.SADshow)
   document.getElementById('menu-btn').addEventListener('click', function () {

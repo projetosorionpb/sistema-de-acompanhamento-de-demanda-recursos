@@ -19,7 +19,8 @@
     resumo: { preset: 'hoje', dini: '', dfim: '' }, // período do resumo do usuário
     encSearch: '', // busca da tela Encerrados
     ocoSearch: '', // busca da tela Ocorrências
-    despSearch: '', // busca da tela Despachados
+    despSearch: '', // busca geral da tela Despachados
+    desp: { numos: '', codserv: '', cliente: '', cidade: '', reg: '', origem: '', resp: '', despPor: '', dini: '', dfim: '', despIni: '', despFim: '', sort: 'desp-desc' }, // filtros por campo da tela Despachados
     scope: 'mine', // usuário: 'mine' (minha caixa) | 'pool' (disponíveis); admin vê tudo
     sort: { key: 'data-desc' }, // data-desc | data-asc | os-desc | os-asc (clicável no th + select)
     qf: { origem: '', codserv: '' }, // filtros da quarentena
@@ -709,39 +710,257 @@
   }
 
   // ---------- Despachados (OS despachadas saem da caixa) ----------
+  function despFilterCount() {
+    var f = state.desp || {}, n = 0;
+    ['numos', 'codserv', 'cliente', 'cidade', 'reg', 'origem', 'resp', 'despPor'].forEach(function (k) { if (f[k]) n++; });
+    if (f.dini || f.dfim) n++;
+    if (f.despIni || f.despFim) n++;
+    return n;
+  }
+  function syncDespToggle() {
+    var body = $('desp-f-body'), btn = $('btn-desp-f-toggle'), badge = $('desp-f-count');
+    if (!body || !btn) return;
+    var open = true;
+    try { open = localStorage.getItem('sad-desp-f-open') !== '0'; } catch (e) {}
+    body.classList.toggle('closed', !open);
+    btn.classList.toggle('closed', !open);
+    if (badge) {
+      var n = despFilterCount();
+      badge.textContent = n;
+      badge.classList.toggle('show', n > 0);
+    }
+  }
+  function readDespFilters() {
+    var g = function (id) { return (($(id) || {}).value || ''); };
+    return {
+      numos: g('d-numos').replace(/\D/g, ''),
+      codserv: g('d-codserv'),
+      cliente: g('d-cliente').toUpperCase().trim(),
+      cidade: g('d-cidade').toUpperCase().trim(),
+      reg: g('d-reg'),
+      origem: g('d-origem'),
+      resp: g('d-resp'),
+      despPor: g('d-desppor'),
+      dini: g('d-dini'),
+      dfim: g('d-dfim'),
+      despIni: g('d-despcini'),
+      despFim: g('d-despfim'),
+      sort: state.desp.sort || g('d-sort') || 'desp-desc',
+    };
+  }
+  function syncDespFilterInputs() {
+    var f = state.desp || {};
+    if ($('d-numos')) $('d-numos').value = f.numos || '';
+    if ($('d-codserv')) $('d-codserv').value = f.codserv || '';
+    if ($('d-cliente')) $('d-cliente').value = f.cliente || '';
+    if ($('d-cidade')) $('d-cidade').value = f.cidade || '';
+    if ($('d-reg')) $('d-reg').value = f.reg || '';
+    if ($('d-origem')) $('d-origem').value = f.origem || '';
+    if ($('d-resp')) $('d-resp').value = f.resp || '';
+    if ($('d-desppor')) $('d-desppor').value = f.despPor || '';
+    if ($('d-dini')) $('d-dini').value = f.dini || '';
+    if ($('d-dfim')) $('d-dfim').value = f.dfim || '';
+    if ($('d-despcini')) $('d-despcini').value = f.despIni || '';
+    if ($('d-despfim')) $('d-despfim').value = f.despFim || '';
+    if ($('d-sort')) $('d-sort').value = f.sort || 'desp-desc';
+  }
+  function populateDespFilters(db) {
+    var cs = {}, rs = {}, ps = {}, os = {};
+    db.principal.forEach(function (p) {
+      if (p.statusDemanda !== 'DESPACHADO') return;
+      if (!state.isAdmin && !isMine(p)) return;
+      if (p.codserv) cs[p.codserv] = 1;
+      if (p.responsavel) rs[p.responsavel] = 1;
+      if (p.despachadoPor) ps[p.despachadoPor] = 1;
+      if (p.origem) os[p.origem] = 1;
+    });
+    var selC = $('d-codserv');
+    if (selC) {
+      var curC = state.desp.codserv || '';
+      selC.innerHTML = '<option value="">Todos</option>' + Object.keys(cs).sort().map(function (c) {
+        return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+      }).join('');
+      selC.value = curC;
+    }
+    var selR = $('d-resp');
+    if (selR) {
+      var curR = state.desp.resp || '';
+      if (state.isAdmin) {
+        selR.innerHTML = '<option value="">Todos</option><option value="__NONE__">Sem responsável</option>' +
+          Object.keys(rs).sort().map(function (r) { return '<option value="' + esc(r) + '">' + esc(r) + '</option>'; }).join('');
+      } else {
+        var me = (state.user && state.user.email) || '';
+        selR.innerHTML = '<option value="">Todos (meu alcance)</option><option value="__NONE__">Sem responsável</option>' +
+          (me ? '<option value="' + esc(me) + '">Eu (' + esc(me) + ')</option>' : '');
+        if (curR && curR !== '__NONE__' && curR !== me) curR = '';
+      }
+      selR.value = curR;
+    }
+    var selP = $('d-desppor');
+    if (selP) {
+      var curP = state.desp.despPor || '';
+      selP.innerHTML = '<option value="">Todos</option><option value="__NONE__">Sem registro</option>' +
+        Object.keys(ps).sort().map(function (x) { return '<option value="' + esc(x) + '">' + esc(x) + '</option>'; }).join('');
+      selP.value = curP;
+    }
+    var selO = $('d-origem');
+    if (selO) {
+      var curO = state.desp.origem || '';
+      selO.innerHTML = '<option value="">Todas</option>' + Object.keys(os).sort().map(function (x) {
+        return '<option value="' + esc(x) + '">' + esc(x.replace(/_/g, ' ').toLowerCase()) + '</option>';
+      }).join('');
+      selO.value = curO;
+    }
+  }
+  function despSortArrow(col) {
+    var k = state.desp.sort || 'desp-desc';
+    var on = (col === 'os' && k.indexOf('os-') === 0) || (col === 'data' && k.indexOf('data-') === 0) || (col === 'desp' && k.indexOf('desp-') === 0);
+    if (on) return ' <span class="sort-ico on">' + SADICON(k.indexOf('-asc') !== -1 ? 'arrow-up' : 'arrow-down', 13) + '</span>';
+    return ' <span class="sort-ico">' + SADICON('sort', 13) + '</span>';
+  }
+  function sortDespachados(list, key) {
+    var arr = list.slice();
+    key = key || 'desp-desc';
+    var dir = key.indexOf('-asc') !== -1 ? 1 : -1;
+    var byOS = key.indexOf('os-') === 0;
+    var byDesp = key.indexOf('desp-') === 0;
+    arr.sort(function (a, b) {
+      var va, vb;
+      if (byOS) {
+        var na = Number(a.numos), nb = Number(b.numos);
+        va = isFinite(na) ? na : String(a.numos || '');
+        vb = isFinite(nb) ? nb : String(b.numos || '');
+        if (va < vb) return -1 * dir;
+        if (va > vb) return 1 * dir;
+        return 0;
+      }
+      if (byDesp) {
+        va = a.despachadoEm ? String(a.despachadoEm) : '';
+        vb = b.despachadoEm ? String(b.despachadoEm) : '';
+      } else {
+        va = a.dataISO || '';
+        vb = b.dataISO || '';
+      }
+      if (!va && !vb) return String(a.numos) < String(b.numos) ? -1 : 1;
+      if (!va) return 1; // sem data vai para o fim
+      if (!vb) return -1;
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+    return arr;
+  }
   function filteredDespachados(db) {
+    var f = state.desp || {};
     var q = String(state.despSearch || '').trim().toUpperCase();
     var out = db.principal.filter(function (p) {
       if (p.statusDemanda !== 'DESPACHADO') return false;
       if (!state.isAdmin && !isMine(p)) return false;
+      if (f.numos && String(p.numos || '').indexOf(f.numos) === -1) return false;
+      if (f.codserv && String(p.codserv || '') !== f.codserv) return false;
+      if (f.cliente && String(p.cliente || '').toUpperCase().indexOf(f.cliente) === -1) return false;
+      if (f.cidade && String(p.cidade || '').toUpperCase().indexOf(f.cidade) === -1) return false;
+      if (f.reg && String(p.codreg || '') !== f.reg) return false;
+      if (f.origem && String(p.origem || '') !== f.origem) return false;
+      if (f.resp === '__NONE__' && p.responsavel) return false;
+      if (f.resp && f.resp !== '__NONE__' && String(p.responsavel || '').toLowerCase() !== f.resp.toLowerCase()) return false;
+      if (f.despPor === '__NONE__' && p.despachadoPor) return false;
+      if (f.despPor && f.despPor !== '__NONE__' && String(p.despachadoPor || '').toLowerCase() !== f.despPor.toLowerCase()) return false;
+      if (f.dini || f.dfim) {
+        var d = p.dataISO || '';
+        if (!d) return false;
+        if (f.dini && d < f.dini) return false;
+        if (f.dfim && d > f.dfim) return false;
+      }
+      if (f.despIni || f.despFim) {
+        var dd = p.despachadoEm ? String(p.despachadoEm).slice(0, 10) : '';
+        if (!dd) return false;
+        if (f.despIni && dd < f.despIni) return false;
+        if (f.despFim && dd > f.despFim) return false;
+      }
       if (!q) return true;
-      return String(p.numos).indexOf(q) !== -1 ||
-        String(p.cliente || '').toUpperCase().indexOf(q) !== -1 ||
-        String(p.cidade || '').toUpperCase().indexOf(q) !== -1 ||
-        String(p.codserv || '').indexOf(q) !== -1 ||
-        String(p.responsavel || '').toUpperCase().indexOf(q) !== -1;
+      // Busca geral: cobre todos os campos de texto da OS.
+      var hay = [p.numos, p.codserv, p.datasol, p.dataISO, p.codreg, p.regional, p.cidade,
+        p.cliente, p.tel1, p.tel2, p.obs, p.dscsvc, p.statusDemanda, p.responsavel,
+        p.origem, p.motivoOcorrencia, p.despachadoEm, p.despachadoPor]
+        .join(' ').toUpperCase();
+      return hay.indexOf(q) !== -1;
     });
-    return sortPrincipal(out, state.sort.key);
+    return sortDespachados(out, f.sort || 'desp-desc');
+  }
+  var DESP_EXP_COLS = ['NUM OS', 'CODSERV', 'DESCRIÇÃO SERVIÇO', 'DATA SOL', 'REGIONAL', 'CIDADE', 'CLIENTE', 'TEL1', 'TEL2', 'OBSERVAÇÃO', 'STATUS', 'RESPONSÁVEL', 'ORIGEM', 'DESPACHADO EM', 'DESPACHADO POR'];
+  function despToRows(list) {
+    return list.map(function (p) {
+      return {
+        'NUM OS': p.numos,
+        'CODSERV': p.codserv || '',
+        'DESCRIÇÃO SERVIÇO': p.dscsvc || '',
+        'DATA SOL': p.dataISO || p.datasol || '',
+        'REGIONAL': p.regional || REGIONAL_NOME[p.codreg] || p.codreg || '',
+        'CIDADE': p.cidade || '',
+        'CLIENTE': p.cliente || '',
+        'TEL1': p.tel1 || '',
+        'TEL2': p.tel2 || '',
+        'OBSERVAÇÃO': p.obs || '',
+        'STATUS': p.statusDemanda || '',
+        'RESPONSÁVEL': p.responsavel || '',
+        'ORIGEM': p.origem || '',
+        'DESPACHADO EM': p.despachadoEm ? String(p.despachadoEm).slice(0, 10) : '',
+        'DESPACHADO POR': p.despachadoPor || '',
+      };
+    });
+  }
+  function despExpName(ext) {
+    var d = new Date(), p = function (n) { return String(n).padStart(2, '0'); };
+    return 'despachados_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + '.' + ext;
+  }
+  function exportDespachadosCSV() {
+    var rows = despToRows(filteredDespachados(loadDB()));
+    if (!rows.length) { alert('Nada para exportar com os filtros atuais.'); return; }
+    function cell(v) {
+      v = String(v == null ? '' : v);
+      return (/[";\n\r]/.test(v)) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    }
+    var txt = '\uFEFF' + DESP_EXP_COLS.join(';') + '\r\n' +
+      rows.map(function (r) { return DESP_EXP_COLS.map(function (c) { return cell(r[c]); }).join(';'); }).join('\r\n');
+    downloadBlob(new Blob([txt], { type: 'text/csv;charset=utf-8' }), despExpName('csv'));
+  }
+  function exportDespachadosXLSX() {
+    var rows = despToRows(filteredDespachados(loadDB()));
+    if (!rows.length) { alert('Nada para exportar com os filtros atuais.'); return; }
+    try {
+      var ws = XLSX.utils.json_to_sheet(rows, { header: DESP_EXP_COLS });
+      ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 34 }, { wch: 11 }, { wch: 11 }, { wch: 20 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 32 }, { wch: 13 }, { wch: 26 }, { wch: 20 }, { wch: 14 }, { wch: 26 }];
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Despachados');
+      XLSX.writeFile(wb, despExpName('xlsx'));
+    } catch (e) {
+      console.error(e);
+      alert('Falha ao gerar XLSX. Tente o CSV.');
+    }
   }
   function renderDespachados() {
     var el = $('tbl-despachados');
     if (!el) return;
     var db = loadDB();
+    populateDespFilters(db);
+    syncDespToggle();
     var list = filteredDespachados(db);
     var totalP = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
     if (state.pageDesp > totalP) state.pageDesp = totalP;
     var slice = list.slice((state.pageDesp - 1) * PAGE_SIZE, state.pageDesp * PAGE_SIZE);
     var html = '';
     if (!slice.length) {
-      html = '<div class="no-results"><div class="big">' + SADICON('send', 38) + '</div>Nenhuma OS despachada' + (String(state.despSearch || '').trim() ? ' para essa busca.' : '.') + '</div>';
+      var temFiltro = String(state.despSearch || '').trim() || despFilterCount() > 0;
+      html = '<div class="no-results"><div class="big">' + SADICON('send', 38) + '</div>Nenhuma OS despachada' + (temFiltro ? ' para esses filtros.' : '.') + '</div>';
     } else {
       html = '<div class="table-wrap"><table><thead><tr>' +
-        '<th data-sort="os" title="Ordenar por NUM OS" style="cursor:pointer;user-select:none">NUM OS' + sortArrow('os') + '</th>' +
+        '<th data-dsort="os" title="Ordenar por NUM OS" style="cursor:pointer;user-select:none">NUM OS' + despSortArrow('os') + '</th>' +
         '<th>CODSERV</th>' +
-        '<th data-sort="data" title="Ordenar por DATA SOL" style="cursor:pointer;user-select:none">DATA SOL' + sortArrow('data') + '</th>' +
+        '<th data-dsort="data" title="Ordenar por DATA SOL" style="cursor:pointer;user-select:none">DATA SOL' + despSortArrow('data') + '</th>' +
         '<th>CIDADE</th><th>CLIENTE</th>' +
         (state.isAdmin ? '<th>RESPONSÁVEL</th>' : '') +
-        '<th>DESPACHADO EM</th><th>AÇÕES</th></tr></thead><tbody>';
+        '<th data-dsort="desp" title="Ordenar por data do despacho" style="cursor:pointer;user-select:none">DESPACHADO EM' + despSortArrow('desp') + '</th><th>AÇÕES</th></tr></thead><tbody>';
       slice.forEach(function (p) {
         html += '<tr>' +
           '<td><span class="os-id">' + esc(p.numos) + '</span></td>' +
@@ -2653,6 +2872,55 @@
       qd.addEventListener('input', function () { state.despSearch = qd.value || ''; state.pageDesp = 1; renderDespachados(); });
       qd.addEventListener('keydown', function (e) { if (e.key === 'Enter') { state.despSearch = qd.value || ''; state.pageDesp = 1; renderDespachados(); } });
     }
+    // filtros por campo da tela Despachados
+    ['d-numos', 'd-codserv', 'd-cliente', 'd-cidade', 'd-reg', 'd-origem', 'd-resp', 'd-desppor', 'd-dini', 'd-dfim', 'd-despcini', 'd-despfim', 'd-sort'].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      var apply = function () {
+        if (id === 'd-sort') state.desp.sort = el.value || 'desp-desc';
+        state.desp = readDespFilters();
+        state.pageDesp = 1;
+        renderDespachados();
+      };
+      el.addEventListener('input', apply);
+      el.addEventListener('change', apply);
+    });
+    var despToggle = $('btn-desp-f-toggle');
+    if (despToggle) despToggle.addEventListener('click', function () {
+      var open = true;
+      try { open = localStorage.getItem('sad-desp-f-open') !== '0'; } catch (e) {}
+      try { localStorage.setItem('sad-desp-f-open', open ? '0' : '1'); } catch (e) {}
+      syncDespToggle();
+    });
+    var despClear = $('btn-desp-f-clear');
+    if (despClear) despClear.addEventListener('click', function () {
+      state.desp = { numos: '', codserv: '', cliente: '', cidade: '', reg: '', origem: '', resp: '', despPor: '', dini: '', dfim: '', despIni: '', despFim: '', sort: 'desp-desc' };
+      state.despSearch = '';
+      if (qd) qd.value = '';
+      state.pageDesp = 1;
+      syncDespFilterInputs();
+      renderDespachados();
+    });
+    var despCsv = $('btn-desp-exp-csv');
+    if (despCsv) despCsv.addEventListener('click', exportDespachadosCSV);
+    var despXlsx = $('btn-desp-exp-xlsx');
+    if (despXlsx) despXlsx.addEventListener('click', exportDespachadosXLSX);
+    var despExport = $('btn-desp-export');
+    if (despExport) despExport.addEventListener('click', exportDespachadosXLSX);
+    var despExportTop = $('btn-desp-export-top');
+    if (despExportTop) despExportTop.addEventListener('click', exportDespachadosXLSX);
+    // ordenação por clique no cabeçalho da tabela de Despachados
+    document.addEventListener('click', function (e) {
+      var th = e.target.closest ? e.target.closest('th[data-dsort]') : null;
+      if (!th) return;
+      var col = th.getAttribute('data-dsort');
+      var cur = state.desp.sort || 'desp-desc';
+      var asc = cur === col + '-asc';
+      state.desp.sort = col + (asc ? '-desc' : '-asc');
+      state.pageDesp = 1;
+      if ($('d-sort')) $('d-sort').value = state.desp.sort;
+      renderDespachados();
+    });
     var linkDesp = $('link-despachados');
     if (linkDesp) linkDesp.addEventListener('click', function (e) { e.preventDefault(); showView('despachados'); });
 

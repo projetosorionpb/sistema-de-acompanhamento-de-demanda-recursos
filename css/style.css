@@ -242,6 +242,8 @@ body {
 .filters-toggle.closed .filters-chevron { transform: rotate(-90deg); }
 #f2-body { overflow: hidden; transition: opacity .18s ease; }
 #f2-body.closed { display: none; }
+#desp-f-body { overflow: hidden; transition: opacity .18s ease; }
+#desp-f-body.closed { display: none; }
 .check-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .check-pill {
   border: 1px solid var(--border); border-radius: 7px; padding: 8px 13px;
