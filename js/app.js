@@ -3055,7 +3055,7 @@
   function limparListBase() {
     if (!state.list.itens.length) return;
     if (!confirm('Apagar os ' + state.list.itens.length + ' itens da LIST salvos NO SISTEMA?\n\n' +
-      'Isso NÃO altera a lista no SharePoint e NÃO mexe nas OS da caixa, quarentena ou banco.\n' +
+      'Isso NÃO altera a lista no SharePoint e NÃO mexe nas OS da caixa ou da quarentena.\n' +
       'A próxima execução do Conector LIST baixa tudo de novo.')) return;
     supa().from('list_itens').delete().neq('numos', '').then(function (r) {
       if (r && r.error) { alert('Falha ao limpar: ' + r.error.message); return; }
