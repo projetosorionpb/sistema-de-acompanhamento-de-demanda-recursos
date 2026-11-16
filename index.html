@@ -264,23 +264,25 @@
             <div class="btn-row">
               <button class="btn-primary" id="btn-list-token"><span data-icon="key" data-size="16"></span>&nbsp;Gerar token (24h)</button>
               <button class="btn-ghost" id="btn-list-refresh"><span data-icon="refresh" data-size="15"></span>Atualizar</button>
-              <button class="btn-ghost" id="btn-list-limpar"><span data-icon="trash" data-size="15"></span>Limpar base</button>
+              <button class="btn-ghost" id="btn-list-install-toggle" aria-expanded="false"><span data-icon="download" data-size="15"></span><span id="btn-list-install-label">Instalar conector</span></button>
+              <button class="btn-ghost" id="btn-list-limpar" title="Apaga somente os dados da LIST salvos no sistema; não altera o SharePoint"><span data-icon="trash" data-size="15"></span>Limpar dados da LIST</button>
             </div>
             <div class="alert-box" id="list-token-box" style="display:none"></div>
 
-            <div style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:14px">
-              <div style="font-weight:650;margin-bottom:4px">Instalar o conector</div>
-              <div class="panel-hint" style="margin:0 0 10px">Arraste para a barra de favoritos. Depois abra a lista no SharePoint e clique no favorito.</div>
+            <div id="list-install" style="display:none;margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:14px">
+              <div style="font-weight:650;margin-bottom:4px">Instalar o conector (bookmarklet)</div>
+              <div class="panel-hint" style="margin:0 0 10px">
+                Um <b>bookmarklet</b> é um favorito com um pequeno programa. Ele roda <b>na página da lista do SharePoint</b> (onde você já está logado), lê as OS e a data da 1ª versão e envia para este sistema. Não roda aqui no site e não precisa instalar extensão.
+              </div>
               <div class="btn-row" style="margin-top:0">
                 <a class="btn-primary" id="bm-pub" href="#" draggable="false" style="text-decoration:none;cursor:grab">Conector LIST (publicar)</a>
                 <a class="btn-ghost" id="bm-csv" href="#" draggable="false" style="text-decoration:none;cursor:grab">Data da 1ª versão (CSV)</a>
                 <button class="btn-ghost" id="bm-copy-pub">Copiar código do conector</button>
                 <button class="btn-ghost" id="bm-copy-csv">Copiar código CSV</button>
               </div>
-              <div class="panel-hint" id="bm-status">Carregando conector…</div>
+              <div class="panel-hint" id="bm-status">Abra esta opção para carregar o conector.</div>
+              <div class="panel-hint" style="margin-top:8px">Passos: 1) arraste o <b>Conector LIST</b> para a barra de favoritos; 2) gere o token; 3) abra a lista no SharePoint e clique no favorito, colando o token quando pedir; 4) volte aqui e clique em <b>Atualizar</b>. Primeira vez: rode <code>docs/CONEXAO_LIST.sql</code> no Supabase.</div>
             </div>
-
-            <div class="panel-hint">Passos: 1) gere o token; 2) arraste o conector para os favoritos; 3) abra a lista no SharePoint e clique no favorito, colando o token quando pedir; 4) volte aqui e clique em <b>Atualizar</b>. Primeira vez: rode <code>docs/CONEXAO_LIST.sql</code> no Supabase.</div>
           </div>
         </div>
 

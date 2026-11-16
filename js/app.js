@@ -62,7 +62,7 @@
     if ($('page-desc')) $('page-desc').textContent = t[1];
     if (v === 'acompanhar') renderAcompanhar();
     if (v === 'metricas') renderMetricas();
-    if (v === 'list') { renderList(); carregarBookmarklets(); }
+    if (v === 'list') renderList();
     if (v === 'distribuir') renderDistribuicao();
     if (v === 'encerrados') renderEncerrados();
     if (v === 'despachados') renderDespachados();
@@ -3054,7 +3054,9 @@
 
   function limparListBase() {
     if (!state.list.itens.length) return;
-    if (!confirm('Apagar a base LIST conectada (' + state.list.itens.length + ' itens)?\nA próxima execução do conector repõe tudo.')) return;
+    if (!confirm('Apagar os ' + state.list.itens.length + ' itens da LIST salvos NO SISTEMA?\n\n' +
+      'Isso NÃO altera a lista no SharePoint e NÃO mexe nas OS da caixa, quarentena ou banco.\n' +
+      'A próxima execução do Conector LIST baixa tudo de novo.')) return;
     supa().from('list_itens').delete().neq('numos', '').then(function (r) {
       if (r && r.error) { alert('Falha ao limpar: ' + r.error.message); return; }
       carregarListConexao(true);
@@ -3137,6 +3139,17 @@
     if (lref) lref.addEventListener('click', function () {
       lref.disabled = true;
       carregarListConexao(false).then(function () { lref.disabled = false; });
+    });
+    var ltoggle = $('btn-list-install-toggle');
+    if (ltoggle) ltoggle.addEventListener('click', function () {
+      var box = $('list-install');
+      if (!box) return;
+      var abrir = box.style.display === 'none' || !box.style.display;
+      box.style.display = abrir ? 'block' : 'none';
+      ltoggle.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+      var rotulo = $('btn-list-install-label');
+      if (rotulo) rotulo.textContent = abrir ? 'Ocultar instalação' : 'Instalar conector';
+      if (abrir) carregarBookmarklets();
     });
     var llim = $('btn-list-limpar');
     if (llim) llim.addEventListener('click', limparListBase);
