@@ -642,6 +642,7 @@
         'a próxima importação com os filtros corretos as recoloca no lugar certo.\n' +
         '\nDepois, suba as duas bases com os filtros corretos e use “Jogar no banco”.\n\nContinuar?';
       if (!confirm(msg)) return;
+      if (!(await pedirSenha('Desfazer importação', 'Confirme sua senha para apagar o que a última importação criou (somente OS ainda A INICIAR e quarentena daquela importação).'))) return;
 
       var d1 = await client.from('demandas').delete().gt('created_at', corte).eq('status_demanda', 'A INICIAR');
       if (d1.error) throw d1.error;
@@ -724,11 +725,13 @@
       ok.textContent = filter ? 'Apagar filtrados' : 'Apagar tudo';
       ok.disabled = false;
     }
-    renderClearPreview();
-    if (!filter) {
-      var pw = $('clr-senha');
-      if (pw) setTimeout(function () { pw.focus(); }, 30);
+    var lbl = $('clr-senha-label');
+    if (lbl) {
+      lbl.textContent = filter
+        ? 'Digite sua senha para confirmar a exclusão dos filtrados'
+        : 'Digite sua senha para confirmar a exclusão total';
     }
+    renderClearPreview();
   }
 
   function renderClearCodList() {
@@ -790,6 +793,64 @@
     if (ok) ok.disabled = !total;
   }
 
+  async function verificarSenhaErro(senha) {
+    if (typeof isSupabaseMode !== 'function' || !isSupabaseMode() || !state.user) {
+      return 'Sessão/Supabase indisponível.';
+    }
+    if (!senha) return 'Digite sua senha.';
+    try {
+      var r = await supa().auth.signInWithPassword({ email: state.user.email, password: senha });
+      if (!r.error) return null;
+      var m = String((r.error && r.error.message) || '');
+      if (/rate|limit|too many/i.test(m)) return 'Muitas tentativas. Aguarde um pouco e tente de novo.';
+      if (/not confirmed/i.test(m)) return 'E-mail não confirmado. Confirme a conta no Supabase.';
+      return 'Senha incorreta. Tente novamente.';
+    } catch (e) {
+      return 'Falha ao confirmar a senha: ' + ((e && e.message) || e);
+    }
+  }
+
+  var _senhaCtx = null;
+  var _senhaVerificando = false;
+
+  function pedirSenha(titulo, texto) {
+    return new Promise(function (resolve) {
+      var ov = $('modal-senha');
+      if (!ov) { resolve(false); return; }
+      _senhaCtx = { resolve: resolve };
+      var t = $('senha-title'); if (t) t.textContent = titulo || 'Confirmar com senha';
+      var d = $('senha-text'); if (d) d.textContent = texto || '';
+      var inp = $('senha-input'); if (inp) inp.value = '';
+      var err = $('senha-err'); if (err) { err.style.display = 'none'; err.textContent = ''; }
+      var ok = $('senha-ok'); if (ok) ok.disabled = false;
+      ov.style.display = 'flex';
+      setTimeout(function () { if (inp) inp.focus(); }, 30);
+    });
+  }
+
+  function fecharSenha(ok) {
+    var ov = $('modal-senha'); if (ov) ov.style.display = 'none';
+    var ctx = _senhaCtx; _senhaCtx = null;
+    if (ctx) ctx.resolve(!!ok);
+  }
+
+  async function confirmarSenhaModal() {
+    if (!_senhaCtx || _senhaVerificando) return;
+    var inp = $('senha-input'), err = $('senha-err'), ok = $('senha-ok');
+    var senha = String((inp && inp.value) || '');
+    if (!senha) { if (err) { err.textContent = 'Digite sua senha.'; err.style.display = ''; } return; }
+    _senhaVerificando = true;
+    if (ok) ok.disabled = true;
+    var erro = await verificarSenhaErro(senha);
+    _senhaVerificando = false;
+    if (erro) {
+      if (err) { err.textContent = erro; err.style.display = ''; }
+      if (ok) ok.disabled = false;
+      return;
+    }
+    fecharSenha(true);
+  }
+
   async function confirmClear() {
     if (!_clearCtx) return;
     var err = $('clr-err');
@@ -802,20 +863,11 @@
     if (ok) ok.disabled = true;
 
     try {
+      var senha = String((($('clr-senha') || {}).value) || '');
+      var senhaErro = await verificarSenhaErro(senha);
+      if (senhaErro) { falha(senhaErro); return; }
+
       if (_clearCtx.mode === 'all') {
-        var senha = String((($('clr-senha') || {}).value) || '');
-        if (!senha) { falha('Digite sua senha para confirmar a exclusão total.'); return; }
-        if (typeof isSupabaseMode !== 'function' || !isSupabaseMode() || !state.user) {
-          falha('Sessão/Supabase indisponível.'); return;
-        }
-        var auth = await supa().auth.signInWithPassword({ email: state.user.email, password: senha });
-        if (auth.error) {
-          var am = String((auth.error && auth.error.message) || '');
-          if (/rate|limit|too many/i.test(am)) falha('Muitas tentativas. Aguarde um pouco e tente de novo.');
-          else if (/not confirmed/i.test(am)) falha('E-mail não confirmado. Confirme a conta no Supabase.');
-          else falha('Senha incorreta. Tente novamente.');
-          return;
-        }
         if (!confirm('Confirma apagar TUDO do banco?\n\nCaixa, quarentena, reprovadas e histórico de importações de todos os usuários.')) {
           if (ok) ok.disabled = false; return;
         }
@@ -3367,11 +3419,12 @@
       'list_sharepoint_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.csv');
   }
 
-  function limparListBase() {
+  async function limparListBase() {
     if (!state.list.itens.length) return;
     if (!confirm('Apagar os ' + state.list.itens.length + ' itens da LIST salvos NO SISTEMA?\n\n' +
       'Isso NÃO altera a lista no SharePoint e NÃO mexe nas OS da caixa ou da quarentena.\n' +
       'A próxima execução do Conector LIST baixa tudo de novo.')) return;
+    if (!(await pedirSenha('Limpar dados da LIST', 'Confirme sua senha para apagar os dados da LIST salvos no sistema. O SharePoint não é alterado.'))) return;
     supa().from('list_itens').delete().neq('numos', '').then(function (r) {
       if (r && r.error) { alert('Falha ao limpar: ' + r.error.message); return; }
       carregarListConexao(true);
@@ -3757,21 +3810,23 @@
       renderAll(ar.added + ' OS aprovada(s) → caixa principal.' + (ar.skipped ? ' (' + ar.skipped + ' conflito(s) ignorados — revise um a um na aba Conflitos.)' : ''));
     });
     var bqd = $('btn-q-apagar');
-    if (bqd) bqd.addEventListener('click', function () {
+    if (bqd) bqd.addEventListener('click', async function () {
       if (!state.isAdmin) { alert('Somente admin.'); return; }
       var qf = quarFilteredKeys();
       if (!qf.list.length) { alert('Nada nos filtros atuais.'); return; }
       if (!confirm('Apagar ' + qf.list.length + ' item(ns) FILTRADO(S) da quarentena? (Arquiva como reprovada p/ não voltar na próxima importação. A caixa NÃO é tocada.)')) return;
+      if (!(await pedirSenha('Apagar quarentena', 'Confirme sua senha para apagar ' + qf.list.length + ' item(ns) filtrado(s) da quarentena.'))) return;
       var n = removeQuarList(qf.list, true);
       renderAll(n + ' item(ns) apagado(s) da quarentena.');
     });
     var bql = $('btn-q-limpar');
-    if (bql) bql.addEventListener('click', function () {
+    if (bql) bql.addEventListener('click', async function () {
       if (!state.isAdmin) { alert('Somente admin.'); return; }
       var db0 = loadDB();
       if (!db0.quarentena.length) { alert('Quarentena já está vazia.'); return; }
       if (!confirm('Apagar TUDO da quarentena (' + db0.quarentena.length + ' itens)? Arquiva como reprovadas p/ não voltarem. A caixa principal NÃO é tocada.')) return;
       if (!confirm('Confirma mesmo? Essa ação esvazia a quarentena.')) return;
+      if (!(await pedirSenha('Esvaziar quarentena', 'Confirme sua senha para apagar TODA a quarentena (' + db0.quarentena.length + ' itens).'))) return;
       var n = removeQuarList(db0.quarentena, true);
       renderAll('Quarentena esvaziada: ' + n + ' item(ns) apagado(s).');
     });
@@ -4120,6 +4175,16 @@
     if (mc) mc.addEventListener('click', function (e) { if (e.target === mc) closeClearModal(); });
     var cpw = $('clr-senha');
     if (cpw) cpw.addEventListener('keydown', function (e) { if (e.key === 'Enter') confirmClear(); });
+
+    // Modal de senha (confirmação de exclusões)
+    var scancel = $('senha-cancel');
+    if (scancel) scancel.addEventListener('click', function () { fecharSenha(false); });
+    var sok = $('senha-ok');
+    if (sok) sok.addEventListener('click', confirmarSenhaModal);
+    var sinp = $('senha-input');
+    if (sinp) sinp.addEventListener('keydown', function (e) { if (e.key === 'Enter') confirmarSenhaModal(); });
+    var sov = $('modal-senha');
+    if (sov) sov.addEventListener('click', function (e) { if (e.target === sov) fecharSenha(false); });
   }
 
   function handleFile(file, kind) {

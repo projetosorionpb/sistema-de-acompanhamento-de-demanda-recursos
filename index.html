@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261116a">
+<link rel="stylesheet" href="css/style.css?v=20261116b">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/config.js?v=20261104a"></script>
@@ -882,10 +882,11 @@
         <div class="alert-box" style="display:block">
           Isso apaga <b>caixa, quarentena, reprovadas e histórico de importações</b> de todos os usuários. Não tem volta.
         </div>
-        <div class="modal-field" style="margin-top:10px">
-          <label>Digite sua senha de login para confirmar</label>
-          <input type="password" id="clr-senha" autocomplete="current-password" placeholder="Sua senha do sistema">
-        </div>
+      </div>
+
+      <div class="modal-field" style="margin-top:14px">
+        <label id="clr-senha-label">Digite sua senha para confirmar</label>
+        <input type="password" id="clr-senha" autocomplete="current-password" placeholder="Sua senha do sistema">
       </div>
 
       <div class="alert-box" id="clr-err" style="display:none;margin-top:12px"></div>
@@ -897,7 +898,26 @@
   </div>
 </div>
 
-<script src="js/app.js?v=20261116b"></script>
+<!-- Modal senha (confirmação de qualquer exclusão) -->
+<div class="modal-overlay" id="modal-senha" style="display:none">
+  <div class="modal-card" style="max-width:420px">
+    <div class="modal-title" id="senha-title">Confirmar com senha</div>
+    <div class="modal-body">
+      <div id="senha-text" style="margin-bottom:10px"></div>
+      <div class="modal-field">
+        <label>Sua senha de login</label>
+        <input type="password" id="senha-input" autocomplete="current-password" placeholder="Sua senha do sistema">
+      </div>
+      <div class="alert-box" id="senha-err" style="display:none;margin-top:10px"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-ghost" id="senha-cancel">Cancelar</button>
+      <button class="btn-primary" id="senha-ok" style="flex:1;min-width:140px">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js?v=20261116c"></script>
 <script>
   // Drawer mobile (navegação das views fica no app.js via window.SADshow)
   document.getElementById('menu-btn').addEventListener('click', function () {
