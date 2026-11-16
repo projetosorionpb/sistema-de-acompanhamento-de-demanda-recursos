@@ -579,6 +579,87 @@
     renderAll('Banco atualizado (incremental, nada apagado): +' + newP + ' novos na caixa, +' + newQ + ' na quarentena, +' + newDiv + ' conflito(s) p/ revisar · ' + closedP + ' já encerradas mantidas, ' + (keptP - closedP) + ' abertas preservadas' + (dupToQ ? ', ' + dupQ + ' repetida(s) → quarentena (JÁ NA CAIXA)' : '') + ', ' + promoted + ' promovidas da quarentena' + ((skipReproved + skipDivRep) ? ', ' + (skipReproved + skipDivRep) + ' reprovadas ignoradas' : '') + distMsg + '.');
   }
 
+  // ---------- desfazer a última importação ----------
+  // Apaga somente o que a última importação criou e que ainda está intocado:
+  // OS na caixa com status A INICIAR e itens de quarentena criados depois da
+  // importação anterior. Não mexe em OS já trabalhadas, reprovadas, importações
+  // anteriores nem no SharePoint.
+  async function undoLastImport() {
+    if (typeof isSupabaseMode !== 'function' || !isSupabaseMode()) {
+      alert('Supabase não configurado.');
+      return;
+    }
+    var client = supa();
+    try {
+      var res = await client.from('importacoes')
+        .select('id,created_at,novas_principal,novas_quarentena,promovidas')
+        .order('id', { ascending: false })
+        .limit(2);
+      if (res.error) throw res.error;
+      var rows = res.data || [];
+      if (!rows.length) {
+        alert('Não há importações registradas para desfazer.');
+        return;
+      }
+      var alvo = rows[0];
+      var corte = rows[1] ? rows[1].created_at : '1970-01-01T00:00:00Z';
+      var primeira = !rows[1];
+
+      var cDem = await client.from('demandas')
+        .select('numos', { count: 'exact', head: true })
+        .gt('created_at', corte)
+        .eq('status_demanda', 'A INICIAR');
+      if (cDem.error) throw cDem.error;
+      var cQuar = await client.from('quarentena')
+        .select('id', { count: 'exact', head: true })
+        .gt('created_at', corte);
+      if (cQuar.error) throw cQuar.error;
+
+      var nDem = cDem.count || 0;
+      var nQuar = cQuar.count || 0;
+      if (!nDem && !nQuar) {
+        alert('Nada para desfazer: não há OS A INICIAR nem itens de quarentena criados depois da importação anterior.');
+        return;
+      }
+
+      var amostra = await client.from('demandas')
+        .select('numos')
+        .gt('created_at', corte)
+        .eq('status_demanda', 'A INICIAR')
+        .limit(10);
+      var lista = (amostra.data || []).map(function (x) { return x.numos; }).join(', ');
+
+      var msg = 'Desfazer a última importação' +
+        (alvo.created_at ? ' (' + dataHoraBr(alvo.created_at) + ')' : '') + '?\n\n' +
+        'Vai APAGAR do sistema:\n' +
+        '• ' + nDem + ' OS na caixa que ainda estão A INICIAR' +
+        (lista ? ' (ex.: ' + lista + (nDem > 10 ? '…' : '') + ')' : '') + ';\n' +
+        '• ' + nQuar + ' item(ns) da quarentena criados nessa importação.\n\n' +
+        'NÃO apaga: OS já trabalhadas (EM ANDAMENTO, ENCERRADO, DESPACHADO, OCORRÊNCIA), ' +
+        'OS de importações anteriores, reprovadas nem a lista do SharePoint.\n' +
+        (primeira ? '\nATENÇÃO: é a primeira importação — isso remove TODA a quarentena e todas as OS ainda A INICIAR.\n' : '') +
+        '\nOS que estavam na quarentena e foram promovidas para a caixa não voltam sozinhas para a quarentena; ' +
+        'a próxima importação com os filtros corretos as recoloca no lugar certo.\n' +
+        '\nDepois, suba as duas bases com os filtros corretos e use “Jogar no banco”.\n\nContinuar?';
+      if (!confirm(msg)) return;
+
+      var d1 = await client.from('demandas').delete().gt('created_at', corte).eq('status_demanda', 'A INICIAR');
+      if (d1.error) throw d1.error;
+      var d2 = await client.from('quarentena').delete().gt('created_at', corte);
+      if (d2.error) throw d2.error;
+      var d3 = await client.from('importacoes').delete().gt('created_at', corte);
+      if (d3.error) throw d3.error;
+
+      var msgOk = 'Importação desfeita: -' + nDem + ' OS A INICIAR e -' + nQuar + ' item(ns) da quarentena.';
+      var recarregou = false;
+      try { if (window.SADDB && SADDB.refresh) recarregou = await SADDB.refresh(); } catch (eR) {}
+      if (recarregou) renderAll(msgOk);
+      else alert(msgOk + '\n\nRecarregue a página (F5) para atualizar a tela.');
+    } catch (e) {
+      alert('Não consegui desfazer a importação: ' + ((e && e.message) || e));
+    }
+  }
+
   // ---------- render ----------
   function statusBadge(st) {
     var cls = 'badge-gray';
@@ -3763,6 +3844,8 @@
         renderDistribuicao();
       }
     });
+    var bui = $('btn-undo-import');
+    if (bui) bui.addEventListener('click', undoLastImport);
     var bc = $('btn-clear');
     if (bc) bc.addEventListener('click', function () {
       if (!confirm('ATENÇÃO: limpar apaga caixa + quarentena + reprovadas de TODOS os usuários (banco compartilhado).')) return;
