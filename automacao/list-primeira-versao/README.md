@@ -69,6 +69,8 @@ M365). Por isso o **conector roda na página da lista** e grava no Supabase; o s
 
 O conector também **remove da base as OS que não estão mais na lista** (quando a
 extração é completa, sem filtro/limite) — a tela sempre reflete o SharePoint.
+Se a lista tiver **mais de um item com a mesma OS**, o conector consolida em uma
+linha (mantém a 1ª versão mais antiga), porque a chave do sistema é o NUMOS.
 
 Segurança: a `anon key` é pública por design; a escrita só é aceita pela função
 `publicar_list()`, que exige o token válido. A tabela `list_itens` é somente-admin.

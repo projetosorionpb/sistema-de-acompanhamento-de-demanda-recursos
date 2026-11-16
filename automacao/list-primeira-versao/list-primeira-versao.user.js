@@ -644,7 +644,28 @@
         return { ok: false, erro: 'sem itens' };
       }
 
-      const itens = linhas.map((l) => ({
+      const ordem = [];
+      const porOS = {};
+      linhas.forEach((l) => {
+        if (!l.OS) return;
+        if (!porOS[l.OS]) {
+          porOS[l.OS] = l;
+          ordem.push(l.OS);
+          return;
+        }
+        // Mesma OS em vários itens: fica a 1ª versão mais antiga.
+        const atual = porOS[l.OS];
+        const a = atual.CriadoUTC || '';
+        const b = l.CriadoUTC || '';
+        if (b && (!a || b < a)) porOS[l.OS] = l;
+      });
+      const unicas = ordem.map((os) => porOS[os]);
+      if (unicas.length !== linhas.length) {
+        log('Consolidadas ' + (linhas.length - unicas.length) +
+          ' linha(s) com a mesma OS (mantida a 1ª versão mais antiga).');
+      }
+
+      const itens = unicas.map((l) => ({
         numos: l.OS,
         item_id: l.ItemID,
         codserv: l.CODSERV || '',

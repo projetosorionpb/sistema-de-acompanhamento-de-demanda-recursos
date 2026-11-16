@@ -113,6 +113,16 @@ begin
       nullif(x ->> 'modificado_em', '')::timestamptz                   as modificado_em,
       nullif(x ->> 'run_id', '')::uuid                                 as run_id
     from jsonb_array_elements(p_itens) x
+  ),
+  -- A LIST pode ter mais de um item com a mesma OS. A chave do sistema é o
+  -- NUMOS, então consolidamos em uma linha: fica o item com a 1ª versão mais
+  -- antiga (e, em empate, o menor Id). Sem isso, o ON CONFLICT falha quando o
+  -- mesmo numos aparece duas vezes no mesmo lote.
+  unica as (
+    select distinct on (numos) *
+    from entrada
+    where numos is not null
+    order by numos, primeira_versao_em nulls last, item_id nulls last
   )
   insert into public.list_itens (
     numos, item_id, codserv, descricao, local, regional,
@@ -123,8 +133,7 @@ begin
     numos, item_id, codserv, descricao, local, regional,
     solicitacao, solicitacao_iso, status_origem, telefone,
     data_primeira_versao, primeira_versao_em, modificado_em, run_id, now()
-  from entrada
-  where numos is not null
+  from unica
   on conflict (numos) do update set
     item_id              = excluded.item_id,
     codserv              = excluded.codserv,
