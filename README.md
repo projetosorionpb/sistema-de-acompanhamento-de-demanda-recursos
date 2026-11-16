@@ -41,7 +41,7 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 
 ## Novidades
 
-- **LIST conectada (admin):** tela **LIST** mostra os itens do SharePoint com a **data da 1ª versão**, última modificação e filtros — inclusive **filtrar várias OS de uma vez colando a lista** (vírgula, espaço ou uma por linha), com contagem de encontradas/não encontradas. Sem upload de CSV: um conector roda na página da lista e grava no Supabase (`docs/CONEXAO_LIST.sql`); a base entra na comparação pelo botão **Usar na comparação**.
+- **LIST conectada (admin):** tela **LIST** mostra os itens do SharePoint com a **data da 1ª versão**, última modificação e filtros — inclusive **filtrar várias OS de uma vez colando a lista** (vírgula, espaço ou uma por linha), com contagem de encontradas/não encontradas. Sem upload de CSV: um conector roda na página da lista e grava no Supabase (`docs/CONEXAO_LIST.sql`); os botões para instalar o conector ficam na própria tela **LIST**.
 
 - **Quarentena em massa (admin):** Aprovar filtrados → caixa, Apagar filtrados, Apagar TUDO (dupla confirmação; arquiva como reprovada p/ não voltar; caixa nunca é tocada).
 - **Duplicadas na importação:** OS congruente que **já está na caixa** vai para a quarentena como **JÁ NA CAIXA** para o admin revisar (opção “Já está na caixa → quarentena”, pode desmarcar para só ignorar).

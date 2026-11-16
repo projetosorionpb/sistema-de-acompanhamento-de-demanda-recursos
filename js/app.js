@@ -62,7 +62,7 @@
     if ($('page-desc')) $('page-desc').textContent = t[1];
     if (v === 'acompanhar') renderAcompanhar();
     if (v === 'metricas') renderMetricas();
-    if (v === 'list') renderList();
+    if (v === 'list') { renderList(); carregarBookmarklets(); }
     if (v === 'distribuir') renderDistribuicao();
     if (v === 'encerrados') renderEncerrados();
     if (v === 'despachados') renderDespachados();
@@ -2692,6 +2692,71 @@
       h.slice(6, 8).join('') + '-' + h.slice(8, 10).join('') + '-' + h.slice(10, 16).join('');
   }
 
+  var BM = { pub: '', csv: '', carregado: false, carregando: false };
+
+  async function carregarBookmarklets() {
+    if (BM.carregado || BM.carregando) return;
+    BM.carregando = true;
+    var st = $('bm-status');
+    if (st) st.textContent = 'Carregando conector…';
+    try {
+      var base = 'automacao/list-primeira-versao/';
+      var rs = await Promise.all([
+        fetch(base + 'conector.txt', { cache: 'no-cache' }),
+        fetch(base + 'bookmarklet.txt', { cache: 'no-cache' }),
+      ]);
+      if (!rs[0].ok || !rs[1].ok) {
+        throw new Error('HTTP ' + rs[0].status + '/' + rs[1].status);
+      }
+      var pub = (await rs[0].text()).trim();
+      var csv = (await rs[1].text()).trim();
+      if (pub.indexOf('javascript:') !== 0 || csv.indexOf('javascript:') !== 0) {
+        throw new Error('conteúdo do bookmarklet inválido');
+      }
+      BM.pub = pub;
+      BM.csv = csv;
+      BM.carregado = true;
+      aplicarBookmarklets();
+      if (st) st.textContent = 'Pronto. Arraste os botões para a barra de favoritos.';
+    } catch (e) {
+      if (st) {
+        st.textContent = 'Não consegui carregar os conectores (' +
+          ((e && e.message) || e) + '). Confira se a pasta automacao foi publicada.';
+      }
+    } finally {
+      BM.carregando = false;
+    }
+  }
+
+  function aplicarBookmarklets() {
+    [['bm-pub', BM.pub], ['bm-csv', BM.csv]].forEach(function (par) {
+      var a = $(par[0]);
+      if (!a || !par[1]) return;
+      a.setAttribute('href', par[1]);
+      a.setAttribute('draggable', 'true');
+    });
+  }
+
+  function copiarTexto(txt, botao) {
+    if (!txt) {
+      alert('O conector ainda não terminou de carregar. Aguarde um instante.');
+      return;
+    }
+    function ok() {
+      if (!botao) return;
+      var antigo = botao.getAttribute('data-rotulo') || botao.textContent;
+      botao.setAttribute('data-rotulo', antigo);
+      botao.textContent = 'Copiado!';
+      setTimeout(function () { botao.textContent = antigo; }, 1500);
+    }
+    function falhou() { window.prompt('Copie o código do conector:', txt); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(ok, falhou);
+    } else {
+      falhou();
+    }
+  }
+
   function listFiltrada() {
     var f = state.list.filtro || {};
     var q = String(f.q || '').trim().toUpperCase();
@@ -2762,8 +2827,6 @@
           (dataHoraBr(state.list.meta && state.list.meta.atualizadoEm) || '—')
         : 'Nenhum item conectado ainda. Gere o token e rode o conector na lista do SharePoint.';
     }
-    var bu = $('btn-list-usar');
-    if (bu) bu.disabled = !n;
     var bl = $('btn-list-limpar');
     if (bl) bl.disabled = !n;
   }
@@ -2970,44 +3033,6 @@
     }
   }
 
-  function usarListNaComparacao() {
-    if (!state.list.itens.length) {
-      alert('Nenhum item conectado. Gere o token e rode o Conector LIST primeiro.');
-      return;
-    }
-    var rows = state.list.itens.map(function (r) {
-      return {
-        OS: r.numos,
-        'Código de Serviço': r.codserv,
-        'Descrição do Serviço': r.descricao,
-        Local: r.local,
-        Regional: r.regional,
-        'Solicitação': r.solicitacao || r.solicitacaoISO,
-        Status: r.status,
-        'Telefone Cliente': r.telefone,
-        PrimeiraVersao: r.primeiraVersao,
-      };
-    });
-    var headers = Object.keys(rows[0]);
-    var rl = sanitizeList(rows, headers);
-    state.listRaw = rows;
-    state.listClean = rl.clean;
-    state.listFile = { name: 'LIST conectada (SharePoint)', size: 0 };
-    var el = $('st-file-li');
-    if (el) {
-      el.textContent = 'LIST conectada: ' + rl.clean.length + ' OS válidas' +
-        (state.list.meta && state.list.meta.atualizadoEm ? ' · atualizada em ' + dataHoraBr(state.list.meta.atualizadoEm) : '') + '.';
-      el.className = 'upload-status ok';
-    }
-    appendLog(rl.log.join('\n'));
-    buildCodservOptions();
-    var bp = $('btn-process');
-    if (bp) bp.disabled = !(state.siateClean.length && state.listClean.length);
-    renderStats();
-    showView('importar');
-    alert('LIST conectada aplicada na comparação: ' + rl.clean.length + ' OS.\nAgora ajuste os filtros e clique em “Comparar bases”.');
-  }
-
   function exportListCSV() {
     var rows = listFiltrada();
     if (!rows.length) { alert('Nada para exportar com os filtros atuais.'); return; }
@@ -3113,12 +3138,23 @@
       lref.disabled = true;
       carregarListConexao(false).then(function () { lref.disabled = false; });
     });
-    var luse = $('btn-list-usar');
-    if (luse) luse.addEventListener('click', usarListNaComparacao);
     var llim = $('btn-list-limpar');
     if (llim) llim.addEventListener('click', limparListBase);
     var lexp = $('l-export');
     if (lexp) lexp.addEventListener('click', exportListCSV);
+
+    // Bookmarklets de instalação (na própria tela LIST)
+    ['bm-pub', 'bm-csv'].forEach(function (id) {
+      var a = $(id);
+      if (a) a.addEventListener('click', function (e) {
+        e.preventDefault();
+        alert('Arraste este botão para a barra de favoritos.\nDepois abra a lista no SharePoint e clique no favorito.');
+      });
+    });
+    var bcp = $('bm-copy-pub');
+    if (bcp) bcp.addEventListener('click', function () { copiarTexto(BM.pub, bcp); });
+    var bcc = $('bm-copy-csv');
+    if (bcc) bcc.addEventListener('click', function () { copiarTexto(BM.csv, bcc); });
 
     document.querySelectorAll('.chip[data-st]').forEach(function (c) {
       c.addEventListener('click', function () { state.statusFilter = c.getAttribute('data-st'); state.pagePrincipal = 1; renderAll(); });

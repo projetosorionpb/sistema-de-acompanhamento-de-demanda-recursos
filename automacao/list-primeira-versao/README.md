@@ -33,20 +33,21 @@ O CSV é baixado automaticamente e o resultado também fica em `LPV.estado.linha
 
 ### Opção C — bookmarklet (clique único, sem instalar nada)
 
-1. Abra `instalar-bookmarklet.html` no navegador.
+1. No site, entre como admin → **LIST** → **Instalar o conector**.
 2. Há **dois botões**:
    - **Conector LIST** — envia as OS para o site (tela **LIST**), sem CSV;
    - **Data da 1ª versão (CSV)** — só baixa o CSV.
 3. Arraste o botão desejado para a barra de favoritos (ou copie o código e cole na URL de um favorito).
 4. Abra a lista no SharePoint logado e clique no favorito.
 
-O bookmarklet é gerado a partir do userscript (fonte única):
+Os bookmarklets são gerados a partir do userscript (fonte única):
 
 ```bat
 node automacao/list-primeira-versao/build-bookmarklet.js
 ```
 
-Isso reescreve `bookmarklet.txt`, `conector.txt` e `instalar-bookmarklet.html`.
+Isso reescreve `bookmarklet.txt` e `conector.txt` (a página LIST do site lê esses
+dois arquivos e monta os botões de instalação).
 Se a política de segurança da página bloquear o favorito, use o console (Opção A).
 
 ## Conectar ao site (sem CSV)
@@ -64,8 +65,7 @@ M365). Por isso o **conector roda na página da lista** e grava no Supabase; o s
    Cole o token quando ele pedir (fica guardado no navegador até expirar).
 4. O conector grava os itens + a data da 1ª versão em `list_itens` e avisa ao terminar.
 5. Volte ao site → **LIST** → **Atualizar**. A tela mostra as OS, a 1ª versão, a
-   última modificação e os filtros; o botão **Usar na comparação** joga essa base
-   na importação (sem upload de CSV).
+   última modificação e os filtros.
 
 O conector também **remove da base as OS que não estão mais na lista** (quando a
 extração é completa, sem filtro/limite) — a tela sempre reflete o SharePoint.

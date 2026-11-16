@@ -188,7 +188,6 @@
                 <label>Base LIST — Gerenciador de Obras (.csv / .xls)</label>
                 <input type="file" id="file-li" accept=".csv,.xls,.xlsx">
                 <div class="upload-status" id="st-file-li">Nenhum arquivo.</div>
-                <div class="panel-hint">Sem CSV? Abra a tela <b>LIST</b> (admin) e use <b>Usar na comparação</b>.</div>
               </div>
             </div>
             <div class="panel-hint">Sanitização SIATE: NUMOS só-dígitos (chave), CODSERV inteiro, DATASOL→ISO, CODREG 1=LESTE 2=CENTRO 3=OESTE, textos trim/upper, telefones só-dígitos, remove sem-NUMOS e duplicadas. LIST: OS normalizada, remove vazias/duplicadas.</div>
@@ -265,11 +264,23 @@
             <div class="btn-row">
               <button class="btn-primary" id="btn-list-token"><span data-icon="key" data-size="16"></span>&nbsp;Gerar token (24h)</button>
               <button class="btn-ghost" id="btn-list-refresh"><span data-icon="refresh" data-size="15"></span>Atualizar</button>
-              <button class="btn-ghost" id="btn-list-usar"><span data-icon="upload" data-size="15"></span>Usar na comparação</button>
               <button class="btn-ghost" id="btn-list-limpar"><span data-icon="trash" data-size="15"></span>Limpar base</button>
             </div>
             <div class="alert-box" id="list-token-box" style="display:none"></div>
-            <div class="panel-hint">Passos: 1) gere o token; 2) abra a lista no SharePoint; 3) clique no favorito <b>Conector LIST</b> e cole o token quando pedir; 4) volte aqui e clique em <b>Atualizar</b>. Primeira vez: rode <code>docs/CONEXAO_LIST.sql</code> no Supabase. Instale o conector em <a href="automacao/list-primeira-versao/instalar-bookmarklet.html" target="_blank" rel="noopener">automacao/list-primeira-versao/instalar-bookmarklet.html</a>.</div>
+
+            <div style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:14px">
+              <div style="font-weight:650;margin-bottom:4px">Instalar o conector</div>
+              <div class="panel-hint" style="margin:0 0 10px">Arraste para a barra de favoritos. Depois abra a lista no SharePoint e clique no favorito.</div>
+              <div class="btn-row" style="margin-top:0">
+                <a class="btn-primary" id="bm-pub" href="#" draggable="false" style="text-decoration:none;cursor:grab">Conector LIST (publicar)</a>
+                <a class="btn-ghost" id="bm-csv" href="#" draggable="false" style="text-decoration:none;cursor:grab">Data da 1ª versão (CSV)</a>
+                <button class="btn-ghost" id="bm-copy-pub">Copiar código do conector</button>
+                <button class="btn-ghost" id="bm-copy-csv">Copiar código CSV</button>
+              </div>
+              <div class="panel-hint" id="bm-status">Carregando conector…</div>
+            </div>
+
+            <div class="panel-hint">Passos: 1) gere o token; 2) arraste o conector para os favoritos; 3) abra a lista no SharePoint e clique no favorito, colando o token quando pedir; 4) volte aqui e clique em <b>Atualizar</b>. Primeira vez: rode <code>docs/CONEXAO_LIST.sql</code> no Supabase.</div>
           </div>
         </div>
 
