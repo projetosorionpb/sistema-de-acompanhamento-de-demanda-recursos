@@ -660,6 +660,240 @@
     }
   }
 
+  // ---------- limpar banco (tudo ou filtrado por serviço) ----------
+  var _clearCtx = null;
+
+  function qCodservs(x) {
+    var out = [];
+    ['c', 'cs', 'cl'].forEach(function (k) {
+      var v = qget(x, k);
+      if (v) out.push(String(v));
+    });
+    return out;
+  }
+
+  function openClearModal() {
+    var db = loadDB();
+    var cont = {};
+    db.principal.forEach(function (p) {
+      var c = String(p.codserv || '');
+      if (c) cont[c] = (cont[c] || 0) + 1;
+    });
+    db.quarentena.forEach(function (x) {
+      qCodservs(x).forEach(function (c) { cont[c] = (cont[c] || 0) + 1; });
+    });
+    var cods = Object.keys(cont).sort(function (a, b) {
+      var na = parseInt(a, 10), nb = parseInt(b, 10);
+      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+      return a.localeCompare(b);
+    });
+
+    _clearCtx = { mode: 'filter', cods: cods, cont: cont, sel: {}, del: null };
+    cods.forEach(function (c) { _clearCtx.sel[c] = true; });
+
+    var err = $('clr-err');
+    if (err) { err.style.display = 'none'; err.textContent = ''; }
+    var pw = $('clr-senha'); if (pw) pw.value = '';
+    var se = $('clr-search'); if (se) se.value = '';
+    renderClearCodList();
+    setClearMode('filter');
+    var ov = $('modal-clear');
+    if (ov) ov.style.display = 'flex';
+  }
+
+  function closeClearModal() {
+    var ov = $('modal-clear');
+    if (ov) ov.style.display = 'none';
+    _clearCtx = null;
+  }
+
+  function setClearMode(mode) {
+    if (!_clearCtx) return;
+    _clearCtx.mode = mode;
+    var filter = mode === 'filter';
+    var bf = $('clr-mode-filter');
+    var ba = $('clr-mode-all');
+    if (bf) bf.className = 'btn-' + (filter ? 'primary' : 'ghost');
+    if (ba) ba.className = 'btn-' + (filter ? 'ghost' : 'primary');
+    var ff = $('clr-filter');
+    var aa = $('clr-all');
+    if (ff) ff.style.display = filter ? '' : 'none';
+    if (aa) aa.style.display = filter ? 'none' : '';
+    var ok = $('clr-ok');
+    if (ok) {
+      ok.textContent = filter ? 'Apagar filtrados' : 'Apagar tudo';
+      ok.disabled = false;
+    }
+    renderClearPreview();
+    if (!filter) {
+      var pw = $('clr-senha');
+      if (pw) setTimeout(function () { pw.focus(); }, 30);
+    }
+  }
+
+  function renderClearCodList() {
+    var el = $('clr-cods');
+    if (!el || !_clearCtx) return;
+    var busca = String(((($('clr-search') || {}).value) || '')).trim().toUpperCase();
+    var cods = _clearCtx.cods.filter(function (c) {
+      return !busca || String(c).toUpperCase().indexOf(busca) !== -1;
+    });
+    if (!cods.length) {
+      el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px">Nenhum serviço encontrado.</div>';
+      return;
+    }
+    el.innerHTML = cods.map(function (c) {
+      var n = _clearCtx.cont[c] || 0;
+      var on = !!_clearCtx.sel[c];
+      return '<label><input type="checkbox" data-cod="' + esc(c) + '"' + (on ? ' checked' : '') + '>' +
+        '<span class="cod">' + esc(c) + '</span>' +
+        '<span class="qtd">(' + n + ' OS)</span></label>';
+    }).join('');
+  }
+
+  function renderClearPreview() {
+    var box = $('clr-preview');
+    var ok = $('clr-ok');
+    if (!_clearCtx) return;
+    if (_clearCtx.mode !== 'filter') {
+      if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+      _clearCtx.del = null;
+      if (ok) ok.disabled = false;
+      return;
+    }
+    var db = loadDB();
+    var set = _clearCtx.sel;
+    var removed = {};
+    var delP = db.principal.filter(function (p) {
+      if (set[String(p.codserv || '')]) { removed[p.numos] = 1; return true; }
+      return false;
+    });
+    var delQ = db.quarentena.filter(function (x) {
+      var codes = qCodservs(x).filter(Boolean);
+      if (codes.length && codes.every(function (c) { return !!set[c]; })) {
+        removed[x.numos] = 1;
+        return true;
+      }
+      return false;
+    });
+    var delR = (db.reproved || []).filter(function (r) { return !!removed[r.numos]; });
+    var total = delP.length + delQ.length + delR.length;
+    _clearCtx.del = { p: delP, q: delQ, r: delR, total: total };
+    if (box) {
+      box.style.display = 'block';
+      box.innerHTML = total
+        ? 'Serão apagadas: <b>' + delP.length + '</b> OS da caixa, <b>' + delQ.length +
+          '</b> item(ns) da quarentena e <b>' + delR.length + '</b> reprovada(s). ' +
+          'O histórico de importações é mantido.'
+        : 'Nenhum item corresponde aos serviços marcados.';
+    }
+    if (ok) ok.disabled = !total;
+  }
+
+  async function confirmClear() {
+    if (!_clearCtx) return;
+    var err = $('clr-err');
+    var ok = $('clr-ok');
+    function falha(m) {
+      if (err) { err.textContent = m; err.style.display = ''; }
+      if (ok) ok.disabled = false;
+    }
+    if (err) { err.style.display = 'none'; err.textContent = ''; }
+    if (ok) ok.disabled = true;
+
+    try {
+      if (_clearCtx.mode === 'all') {
+        var senha = String((($('clr-senha') || {}).value) || '');
+        if (!senha) { falha('Digite sua senha para confirmar a exclusão total.'); return; }
+        if (typeof isSupabaseMode !== 'function' || !isSupabaseMode() || !state.user) {
+          falha('Sessão/Supabase indisponível.'); return;
+        }
+        var auth = await supa().auth.signInWithPassword({ email: state.user.email, password: senha });
+        if (auth.error) {
+          var am = String((auth.error && auth.error.message) || '');
+          if (/rate|limit|too many/i.test(am)) falha('Muitas tentativas. Aguarde um pouco e tente de novo.');
+          else if (/not confirmed/i.test(am)) falha('E-mail não confirmado. Confirme a conta no Supabase.');
+          else falha('Senha incorreta. Tente novamente.');
+          return;
+        }
+        if (!confirm('Confirma apagar TUDO do banco?\n\nCaixa, quarentena, reprovadas e histórico de importações de todos os usuários.')) {
+          if (ok) ok.disabled = false; return;
+        }
+        if (!saveDB({ principal: [], quarentena: [], imports: [], reproved: [] })) {
+          falha('Banco indisponível — nada foi apagado.'); return;
+        }
+        closeClearModal();
+        var rec1 = false;
+        try { rec1 = await SADDB.refresh(); } catch (e1) {}
+        if (rec1) renderAll('Banco limpo para todos (caixa, quarentena, reprovadas e importações).');
+        else alert('Banco apagado. Recarregue a página (F5) para atualizar a tela.');
+        return;
+      }
+
+      renderClearPreview();
+      var del = _clearCtx.del;
+      if (!del || !del.total) { falha('Marque pelo menos um serviço com itens para apagar.'); return; }
+      if (!confirm('Apagar ' + del.p.length + ' OS da caixa, ' + del.q.length +
+        ' item(ns) da quarentena e ' + del.r.length + ' reprovada(s)?\n\n' +
+        'Os demais serviços e o histórico de importações ficam.')) {
+        if (ok) ok.disabled = false; return;
+      }
+
+      var set = _clearCtx.sel;
+      var codsSel = Object.keys(set).filter(function (c) { return !!set[c]; });
+      function uniq(arr) {
+        var o = {}, out = [];
+        arr.forEach(function (x) { if (x != null && x !== '' && !o[x]) { o[x] = 1; out.push(x); } });
+        return out;
+      }
+      function chunks(arr, n) {
+        var out = [];
+        for (var i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+        return out;
+      }
+      var qNumos = uniq(del.q.map(function (x) { return x.numos; }));
+      var rNumos = uniq(del.r.map(function (r) { return r.numos; }));
+      var client = supa();
+      var erroDel = null;
+      try {
+        var lotesP = chunks(codsSel, 150);
+        for (var ip = 0; ip < lotesP.length; ip++) {
+          var rp = await client.from('demandas').delete().in('codserv', lotesP[ip]);
+          if (rp.error) throw rp.error;
+        }
+        var lotesQ = chunks(qNumos, 150);
+        for (var iq = 0; iq < lotesQ.length; iq++) {
+          var rq = await client.from('quarentena').delete().in('numos', lotesQ[iq]);
+          if (rq.error) throw rq.error;
+        }
+        var lotesR = chunks(rNumos, 150);
+        for (var ir = 0; ir < lotesR.length; ir++) {
+          var rr = await client.from('reprovadas').delete().in('numos', lotesR[ir]);
+          if (rr.error) throw rr.error;
+        }
+      } catch (eD) {
+        erroDel = eD;
+      }
+
+      closeClearModal();
+      var rec2 = false;
+      try { rec2 = await SADDB.refresh(); } catch (e2) {}
+      if (erroDel) {
+        alert('Falha ao limpar (pode ter apagado parte): ' + ((erroDel && erroDel.message) || erroDel));
+        if (rec2) renderAll('Limpeza parcial — confira a caixa e a quarentena.');
+        return;
+      }
+      if (rec2) {
+        renderAll('Limpeza filtrada: -' + del.p.length + ' OS, -' + del.q.length +
+          ' quarentena e -' + del.r.length + ' reprovada(s).');
+      } else {
+        alert('Itens apagados. Recarregue a página (F5) para atualizar a tela.');
+      }
+    } catch (e) {
+      falha('Falha ao limpar: ' + ((e && e.message) || e));
+    }
+  }
+
   // ---------- render ----------
   function statusBadge(st) {
     var cls = 'badge-gray';
@@ -3847,33 +4081,43 @@
     var bui = $('btn-undo-import');
     if (bui) bui.addEventListener('click', undoLastImport);
     var bc = $('btn-clear');
-    if (bc) bc.addEventListener('click', function () {
-      if (!confirm('ATENÇÃO: limpar apaga caixa + quarentena + reprovadas de TODOS os usuários (banco compartilhado).')) return;
-      if (!confirm('Confirma mesmo? Essa ação afeta todos e não tem volta.')) return;
-      if (!saveDB({ principal: [], quarentena: [], imports: [], reproved: [] })) {
-        alert('Não foi possível limpar: banco indisponível.');
-        return;
-      }
-      state.result = null; state.siateClean = []; state.listClean = [];
-      $('log').textContent = 'Limpando o banco…';
-      // Confirma no servidor (re-busca) antes de dizer que limpou.
-      var done = function (msg) { renderAll(msg); };
-      try {
-        if (window.SADDB && SADDB.refresh) {
-          SADDB.refresh().then(function () {
-            var d = loadDB();
-            var restou = d.principal.length + d.quarentena.length + d.reproved.length;
-            done(restou
-              ? 'Ainda restam ' + restou + ' registro(s) no servidor — verifique permissões (RLS) do admin.'
-              : 'Banco limpo para todos (caixa, quarentena e reprovadas).');
-          });
-        } else {
-          done('Banco limpo para todos.');
-        }
-      } catch (e) {
-        done('Banco limpo para todos.');
-      }
+    if (bc) bc.addEventListener('click', openClearModal);
+
+    // Modal limpar banco (tudo ou filtrado por serviço)
+    var ccancel = $('clr-cancel');
+    if (ccancel) ccancel.addEventListener('click', closeClearModal);
+    var cok = $('clr-ok');
+    if (cok) cok.addEventListener('click', confirmClear);
+    var cmf = $('clr-mode-filter');
+    if (cmf) cmf.addEventListener('click', function () { setClearMode('filter'); });
+    var cma = $('clr-mode-all');
+    if (cma) cma.addEventListener('click', function () { setClearMode('all'); });
+    var csel = $('clr-selall');
+    if (csel) csel.addEventListener('click', function () {
+      if (!_clearCtx) return;
+      _clearCtx.cods.forEach(function (c) { _clearCtx.sel[c] = true; });
+      renderClearCodList();
+      renderClearPreview();
     });
+    var cnone = $('clr-selnone');
+    if (cnone) cnone.addEventListener('click', function () {
+      if (!_clearCtx) return;
+      _clearCtx.cods.forEach(function (c) { _clearCtx.sel[c] = false; });
+      renderClearCodList();
+      renderClearPreview();
+    });
+    var csearch = $('clr-search');
+    if (csearch) csearch.addEventListener('input', renderClearCodList);
+    var ccods = $('clr-cods');
+    if (ccods) ccods.addEventListener('change', function (e) {
+      if (!_clearCtx) return;
+      var cb = e.target;
+      if (!cb || cb.getAttribute('data-cod') === null) return;
+      _clearCtx.sel[cb.getAttribute('data-cod')] = !!cb.checked;
+      renderClearPreview();
+    });
+    var mc = $('modal-clear');
+    if (mc) mc.addEventListener('click', function (e) { if (e.target === mc) closeClearModal(); });
   }
 
   function handleFile(file, kind) {
