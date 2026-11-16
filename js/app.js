@@ -4118,6 +4118,8 @@
     });
     var mc = $('modal-clear');
     if (mc) mc.addEventListener('click', function (e) { if (e.target === mc) closeClearModal(); });
+    var cpw = $('clr-senha');
+    if (cpw) cpw.addEventListener('keydown', function (e) { if (e.key === 'Enter') confirmClear(); });
   }
 
   function handleFile(file, kind) {
