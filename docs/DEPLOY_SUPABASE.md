@@ -21,6 +21,10 @@
    cole no editor e clique **Run** (deve dar *Success*).
 3. Confira em **Table Editor**: existem `demandas`, `quarentena`,
    `reprovadas`, `importacoes`, `profiles`, `config`.
+4. **Opcional — LIST conectada (admin):** rode também `docs/CONEXAO_LIST.sql`
+   (cria `list_itens`, `list_conexao_tokens` e as funções `publicar_list` /
+   `finalizar_list`). Sem isso, a tela **LIST** fica vazia, mas o resto do
+   sistema funciona normalmente.
 
 ## 3. Criar os logins
 

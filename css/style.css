@@ -217,12 +217,13 @@ body {
 /* Filters */
 .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(152px, 1fr)); gap: 10px; }
 .field label { display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--text3); margin-bottom: 5px; }
-.field input, .field select {
+.field input, .field select, .field textarea {
   width: 100%; background: var(--input-bg); border: 1px solid var(--border);
   color: var(--text); border-radius: 7px; font-size: 12.5px;
   padding: 8px 10px; outline: none; font-family: var(--font); transition: border-color .15s, box-shadow .15s;
 }
-.field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.field textarea { resize: vertical; min-height: 38px; line-height: 1.4; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .panel-slim .panel-body { padding: 14px 18px 16px; }
 .panel-slim .panel-header { padding: 14px 18px 0; }
 .filters-toggle {

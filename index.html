@@ -47,6 +47,7 @@
       <button class="nav-item admin-only" data-nav="metricas"><span class="ni" data-icon="chart"></span>Métricas</button>
       <div class="nav-label admin-only">Administração</div>
       <button class="nav-item admin-only" data-nav="importar"><span class="ni" data-icon="upload"></span>Importar bases</button>
+      <button class="nav-item admin-only" data-nav="list"><span class="ni" data-icon="database"></span>LIST</button>
       <button class="nav-item admin-only" data-nav="distribuir"><span class="ni" data-icon="truck"></span>Distribuição</button>
       <button class="nav-item" data-nav="resumo"><span class="ni" data-icon="dashboard"></span>Resumo</button>
     </nav>
@@ -172,7 +173,7 @@
             <div class="panel-icon"><span data-icon="upload"></span></div>
             <div>
               <div class="panel-title">Importar bases</div>
-              <div class="panel-subtitle">SIATE = LISTA OS (.xls) · LIST = Gerenciador de Obras (.csv) · chave NUMOS exato</div>
+              <div class="panel-subtitle">SIATE = LISTA OS (.xls) · LIST = Gerenciador de Obras (CSV ou conexão SharePoint) · chave NUMOS exato</div>
             </div>
             <span class="panel-step">passo 1</span>
           </div>
@@ -187,6 +188,7 @@
                 <label>Base LIST — Gerenciador de Obras (.csv / .xls)</label>
                 <input type="file" id="file-li" accept=".csv,.xls,.xlsx">
                 <div class="upload-status" id="st-file-li">Nenhum arquivo.</div>
+                <div class="panel-hint">Sem CSV? Abra a tela <b>LIST</b> (admin) e use <b>Usar na comparação</b>.</div>
               </div>
             </div>
             <div class="panel-hint">Sanitização SIATE: NUMOS só-dígitos (chave), CODSERV inteiro, DATASOL→ISO, CODREG 1=LESTE 2=CENTRO 3=OESTE, textos trim/upper, telefones só-dígitos, remove sem-NUMOS e duplicadas. LIST: OS normalizada, remove vazias/duplicadas.</div>
@@ -244,6 +246,91 @@
             </div>
             <div class="alert-box" id="alert" style="display:none"></div>
             <div class="log-box" id="log">Aguardando arquivos…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ VIEW: LIST (SharePoint) ═══ -->
+      <section id="view-list" style="display:none">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon"><span data-icon="cloud"></span></div>
+            <div>
+              <div class="panel-title">LIST · SharePoint</div>
+              <div class="panel-subtitle">Itens do Gerenciador de Obras com a data da 1ª versão — conectado via Supabase, sem upload de CSV.</div>
+            </div>
+            <span class="panel-step" id="list-badge">—</span>
+          </div>
+          <div class="panel-body">
+            <div class="btn-row">
+              <button class="btn-primary" id="btn-list-token"><span data-icon="key" data-size="16"></span>&nbsp;Gerar token (24h)</button>
+              <button class="btn-ghost" id="btn-list-refresh"><span data-icon="refresh" data-size="15"></span>Atualizar</button>
+              <button class="btn-ghost" id="btn-list-usar"><span data-icon="upload" data-size="15"></span>Usar na comparação</button>
+              <button class="btn-ghost" id="btn-list-limpar"><span data-icon="trash" data-size="15"></span>Limpar base</button>
+            </div>
+            <div class="alert-box" id="list-token-box" style="display:none"></div>
+            <div class="panel-hint">Passos: 1) gere o token; 2) abra a lista no SharePoint; 3) clique no favorito <b>Conector LIST</b> e cole o token quando pedir; 4) volte aqui e clique em <b>Atualizar</b>. Primeira vez: rode <code>docs/CONEXAO_LIST.sql</code> no Supabase. Instale o conector em <a href="automacao/list-primeira-versao/instalar-bookmarklet.html" target="_blank" rel="noopener">automacao/list-primeira-versao/instalar-bookmarklet.html</a>.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon"><span data-icon="database"></span></div>
+            <div>
+              <div class="panel-title">Itens da LIST</div>
+              <div class="panel-subtitle" id="list-resumo">Nenhum item conectado ainda.</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="filter-grid">
+              <div class="field">
+                <label>Buscar (OS, serviço, local)</label>
+                <input type="text" id="l-q" placeholder="Ex.: 123456 ou JOÃO PESSOA">
+              </div>
+              <div class="field" style="grid-column: 1 / -1">
+                <label>OS (várias) — cole a lista</label>
+                <textarea id="l-os" rows="2" placeholder="123456, 123457, 123458 — vírgula, espaço ou uma por linha"></textarea>
+              </div>
+              <div class="field">
+                <label>Regional</label>
+                <input type="text" id="l-reg" placeholder="Ex.: LESTE">
+              </div>
+              <div class="field">
+                <label>Status</label>
+                <input type="text" id="l-status" placeholder="Ex.: CONCLUÍDO">
+              </div>
+              <div class="field">
+                <label>1ª versão — de</label>
+                <input type="date" id="l-dini">
+              </div>
+              <div class="field">
+                <label>1ª versão — até</label>
+                <input type="date" id="l-dfim">
+              </div>
+              <div class="field">
+                <label>1ª versão</label>
+                <div class="check-row">
+                  <label class="check-pill" id="l-semdata-pill"><input type="checkbox" id="l-semdata"> Só sem data</label>
+                </div>
+              </div>
+              <div class="field">
+                <label>Ordenar</label>
+                <select id="l-sort">
+                  <option value="pv-asc">1ª versão (mais antiga)</option>
+                  <option value="pv-desc">1ª versão (mais nova)</option>
+                  <option value="os-asc">OS (crescente)</option>
+                  <option value="os-desc">OS (decrescente)</option>
+                  <option value="os-lista">Ordem da lista de OS</option>
+                  <option value="mod-desc">Última modificação</option>
+                </select>
+              </div>
+            </div>
+            <div class="panel-hint" id="l-os-info" style="display:none"></div>
+            <div class="btn-row">
+              <button class="btn-ghost" id="l-export"><span data-icon="download" data-size="15"></span>Exportar CSV</button>
+              <button class="btn-ghost" id="l-limparfiltros"><span data-icon="x" data-size="15"></span>Limpar filtros</button>
+            </div>
+            <div id="l-tabela"></div>
           </div>
         </div>
       </section>

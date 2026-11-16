@@ -25,6 +25,7 @@
     sort: { key: 'data-desc' }, // data-desc | data-asc | os-desc | os-asc (clicável no th + select)
     qf: { origem: '', codserv: '' }, // filtros da quarentena
     pagePrincipal: 1, pageQuar: 1, pageEnc: 1, pageOco: 1, pageDesp: 1,
+    list: { itens: [], meta: null, carregando: false, token: null, page: 1, filtro: { q: '', os: '', reg: '', status: '', dini: '', dfim: '', semData: false, sort: 'pv-asc' } },
     isAdmin: false, user: null,
     codservOptions: [],
   };
@@ -36,17 +37,18 @@
     ocorrencias: ['Ocorrências', 'OS paradas por ocorrência — voltam à caixa do usuário quando resolvidas.'],
     quarentena: ['Quarentena', 'Divergências: tem em uma base e não tem na outra. O admin aprova ou reprova.'],
     importar: ['Importar bases', 'Suba as duas bases (admin), ajuste os filtros e jogue no banco.'],
+    list: ['LIST · SharePoint', 'Itens da lista Gerenciador de Obras com a data da 1ª versão — conexão via Supabase, sem CSV.'],
     distribuir: ['Distribuição', 'Cota automática de OS por usuário: quem zera recebe sozinho.'],
     resumo: ['Resumo', 'Totais da última comparação e do banco local.'],
     acompanhar: ['Acompanhar usuários', 'Quais OS estão com quais pessoas e em qual status.'],
     metricas: ['Métricas', 'Gráficos e tabelas com filtros múltiplos por período, usuário, status da OS, regional e serviço.'],
   };
-  var ADMIN_VIEWS = ['quarentena', 'importar', 'acompanhar', 'metricas', 'distribuir'];
+  var ADMIN_VIEWS = ['quarentena', 'importar', 'list', 'acompanhar', 'metricas', 'distribuir'];
 
   function showView(v) {
     if (ADMIN_VIEWS.indexOf(v) !== -1 && !state.isAdmin) v = 'caixa';
     state.view = v;
-    var map = { caixa: 'view-principal', encerrados: 'view-encerrados', despachados: 'view-despachados', ocorrencias: 'view-ocorrencias', quarentena: 'view-quarentena', importar: 'view-importar', resumo: 'view-resumo', acompanhar: 'view-acompanhar', metricas: 'view-metricas', distribuir: 'view-distribuir' };
+    var map = { caixa: 'view-principal', encerrados: 'view-encerrados', despachados: 'view-despachados', ocorrencias: 'view-ocorrencias', quarentena: 'view-quarentena', importar: 'view-importar', list: 'view-list', resumo: 'view-resumo', acompanhar: 'view-acompanhar', metricas: 'view-metricas', distribuir: 'view-distribuir' };
     Object.keys(map).forEach(function (k) {
       var el = $(map[k]);
       if (el) el.style.display = (k === v) ? '' : 'none';
@@ -60,6 +62,7 @@
     if ($('page-desc')) $('page-desc').textContent = t[1];
     if (v === 'acompanhar') renderAcompanhar();
     if (v === 'metricas') renderMetricas();
+    if (v === 'list') renderList();
     if (v === 'distribuir') renderDistribuicao();
     if (v === 'encerrados') renderEncerrados();
     if (v === 'despachados') renderDespachados();
@@ -277,6 +280,7 @@
     var cLocal = findCol(headers, ['local']);
     var cReg = findCol(headers, ['regional']);
     var cSol = findCol(headers, ['solicitacao']);
+    var cPv = findCol(headers, ['primeiraversao', 'dataprimeiraversao', 'datada1aversao', 'datadaprimeiraversao']);
     var cStatus = findCol(headers, ['status']);
     var cTel = findCol(headers, ['telefonecliente', 'telefone']);
     var clean = [], seen = {}, dups = 0, empty = 0, bad = 0;
@@ -293,6 +297,8 @@
         local: normText(cLocal ? r[cLocal] : ''),
         regional: normText(cReg ? r[cReg] : ''),
         solicitacao: normText(cSol ? r[cSol] : '', false).slice(0, 60),
+        dataISO: cSol ? brToISO(r[cSol]) : '',
+        primeiraVersao: cPv ? (brToISO(r[cPv]) || String(r[cPv] || '')) : '',
         statusOrigem: normText(cStatus ? r[cStatus] : '', false).slice(0, 60),
         telefone: normPhone(cTel ? r[cTel] : ''),
       });
@@ -2658,6 +2664,378 @@
     showView(state.view);
   }
 
+  // ---------- LIST conectada (SharePoint → Supabase) ----------
+  function isoToBr(iso) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
+  }
+
+  function dataHoraBr(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() +
+      ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function uuidV4() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    var b = new Uint8Array(16);
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(b);
+    else for (var i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    var h = [];
+    for (var j = 0; j < 16; j++) h.push((b[j] + 0x100).toString(16).slice(1));
+    return h.slice(0, 4).join('') + '-' + h.slice(4, 6).join('') + '-' +
+      h.slice(6, 8).join('') + '-' + h.slice(8, 10).join('') + '-' + h.slice(10, 16).join('');
+  }
+
+  function listFiltrada() {
+    var f = state.list.filtro || {};
+    var q = String(f.q || '').trim().toUpperCase();
+    var reg = String(f.reg || '').trim().toUpperCase();
+    var st = String(f.status || '').trim().toUpperCase();
+    var pedidas = parseOSFiltro(f.os);
+    var pedidasSet = {};
+    pedidas.forEach(function (os) { pedidasSet[os] = 1; });
+    var rows = (state.list.itens || []).filter(function (r) {
+      if (pedidas.length && !pedidasSet[r.numos]) return false;
+      if (f.semData && r.primeiraVersao) return false;
+      if (q) {
+        var alvo = (r.numos + ' ' + r.codserv + ' ' + r.descricao + ' ' + r.local + ' ' + r.regional).toUpperCase();
+        if (alvo.indexOf(q) === -1) return false;
+      }
+      if (reg && String(r.regional || '').toUpperCase().indexOf(reg) === -1) return false;
+      if (st && String(r.status || '').toUpperCase().indexOf(st) === -1) return false;
+      if (f.dini && (!r.primeiraVersao || r.primeiraVersao < f.dini)) return false;
+      if (f.dfim && (!r.primeiraVersao || r.primeiraVersao > f.dfim)) return false;
+      return true;
+    });
+    var sort = f.sort || 'pv-asc';
+    if (sort === 'os-lista' && pedidas.length) {
+      var pos = {};
+      pedidas.forEach(function (os, i) { pos[os] = i; });
+      rows.sort(function (a, b) {
+        var pa = pos.hasOwnProperty(a.numos) ? pos[a.numos] : 1e9;
+        var pb = pos.hasOwnProperty(b.numos) ? pos[b.numos] : 1e9;
+        if (pa !== pb) return pa - pb;
+        return a.numos < b.numos ? -1 : a.numos > b.numos ? 1 : 0;
+      });
+      return rows;
+    }
+    rows.sort(function (a, b) {
+      if (sort === 'os-asc') return a.numos < b.numos ? -1 : a.numos > b.numos ? 1 : 0;
+      if (sort === 'os-desc') return a.numos > b.numos ? -1 : a.numos < b.numos ? 1 : 0;
+      if (sort === 'mod-desc') return String(b.modificadoEm || '').localeCompare(String(a.modificadoEm || ''));
+      var pa = a.primeiraVersao || '', pb = b.primeiraVersao || '';
+      if (!pa && !pb) return 0;
+      if (!pa) return 1;
+      if (!pb) return -1;
+      return sort === 'pv-desc' ? pb.localeCompare(pa) : pa.localeCompare(pb);
+    });
+    return rows;
+  }
+
+  function parseOSFiltro(v) {
+    var out = [], seen = {};
+    String(v || '').split(/[\s,;]+/).forEach(function (x) {
+      var os = normOS(x);
+      if (os && !seen[os]) { seen[os] = 1; out.push(os); }
+    });
+    return out;
+  }
+
+  function renderListStatus() {
+    var n = (state.list.itens || []).length;
+    var comData = (state.list.itens || []).filter(function (x) { return x.primeiraVersao; }).length;
+    var badge = $('list-badge');
+    if (badge) {
+      badge.textContent = state.list.carregando ? 'carregando…' : (n ? 'Conectada' : 'Sem dados');
+      badge.className = 'panel-step' + (n ? ' ok' : '');
+    }
+    var resumo = $('list-resumo');
+    if (resumo) {
+      resumo.textContent = n
+        ? n + ' item(ns) · ' + comData + ' com data da 1ª versão · última atualização ' +
+          (dataHoraBr(state.list.meta && state.list.meta.atualizadoEm) || '—')
+        : 'Nenhum item conectado ainda. Gere o token e rode o conector na lista do SharePoint.';
+    }
+    var bu = $('btn-list-usar');
+    if (bu) bu.disabled = !n;
+    var bl = $('btn-list-limpar');
+    if (bl) bl.disabled = !n;
+  }
+
+  function renderList() {
+    var wrap = $('l-tabela');
+    if (!wrap) return;
+    var rows = listFiltrada();
+    var totalP = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+    if (state.list.page > totalP) state.list.page = totalP;
+    var slice = rows.slice((state.list.page - 1) * PAGE_SIZE, state.list.page * PAGE_SIZE);
+    var html = '';
+    if (!slice.length) {
+      html = '<div class="no-results"><div class="big">' + SADICON('database', 38) + '</div>' +
+        (state.list.itens.length ? 'Nenhum item para esses filtros.' :
+          'Nenhum item conectado. Vá em <b>Gerar token</b> e rode o conector na lista do SharePoint.') + '</div>';
+    } else {
+      html = '<div class="table-wrap"><table><thead><tr>' +
+        '<th>OS</th><th>1ª VERSÃO</th><th>ÚLT. MODIFICAÇÃO</th><th>CODSERV</th>' +
+        '<th>DESCRIÇÃO</th><th>LOCAL</th><th>REGIONAL</th><th>SOLICITAÇÃO</th><th>STATUS</th>' +
+        '</tr></thead><tbody>';
+      slice.forEach(function (r) {
+        html += '<tr>' +
+          '<td><span class="os-id">' + esc(r.numos) + '</span></td>' +
+          '<td class="mono">' + esc(r.primeiraVersao ? isoToBr(r.primeiraVersao) : '—') + '</td>' +
+          '<td class="mono">' + esc(r.modificadoEm ? dataHoraBr(r.modificadoEm) : '—') + '</td>' +
+          '<td class="mono">' + esc(r.codserv || '—') + '</td>' +
+          '<td>' + esc(r.descricao || '—') + '</td>' +
+          '<td>' + esc(r.local || '—') + '</td>' +
+          '<td>' + esc(r.regional || '—') + '</td>' +
+          '<td class="mono">' + esc(r.solicitacao || '—') + '</td>' +
+          '<td>' + esc(r.status || '—') + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table></div>';
+      html += '<div class="pagination"><button class="page-btn" data-lpg="prev">‹</button>' +
+        '<span class="page-info">Pág ' + state.list.page + '/' + totalP + ' • ' + rows.length + ' itens</span>' +
+        '<button class="page-btn" data-lpg="next">›</button></div>';
+    }
+    wrap.innerHTML = html;
+    renderListStatus();
+    renderListOSInfo(rows);
+  }
+
+  function renderListOSInfo(rows) {
+    var el = $('l-os-info');
+    if (!el) return;
+    var pedidas = parseOSFiltro((state.list.filtro || {}).os);
+    if (!pedidas.length) {
+      el.style.display = 'none';
+      el.innerHTML = '';
+      return;
+    }
+    var base = {};
+    (state.list.itens || []).forEach(function (r) { base[r.numos] = 1; });
+    var encontradas = [], faltando = [];
+    pedidas.forEach(function (os) { (base[os] ? encontradas : faltando).push(os); });
+    var h = '<b>' + encontradas.length + ' de ' + pedidas.length + '</b> OS informadas encontradas na base';
+    if (rows.length !== encontradas.length) {
+      h += ' · <b>' + rows.length + '</b> exibida(s) pelos filtros atuais';
+    }
+    if (faltando.length) {
+      h += ' · <span style="color:#e0a800">não encontrada(s): ' +
+        esc(faltando.slice(0, 12).join(', ')) + (faltando.length > 12 ? '…' : '') + '</span>' +
+        ' <button class="btn-small" id="l-copiar-faltando">Copiar não encontradas</button>';
+    }
+    el.innerHTML = h;
+    el.style.display = '';
+    var bk = $('l-copiar-faltando');
+    if (bk) bk.addEventListener('click', function () {
+      var txt = faltando.join('\n');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function () {
+          bk.textContent = 'Copiado!';
+          setTimeout(function () { bk.textContent = 'Copiar não encontradas'; }, 1500);
+        }, function () { window.prompt('OS não encontradas:', txt); });
+      } else {
+        window.prompt('OS não encontradas:', txt);
+      }
+    });
+  }
+
+  async function carregarListConexao(silencioso) {
+    if (typeof isSupabaseMode !== 'function' || !isSupabaseMode()) {
+      renderListStatus();
+      return false;
+    }
+    state.list.carregando = true;
+    renderListStatus();
+    try {
+      var out = [], from = 0, page = 1000;
+      for (;;) {
+        var res = await supa().from('list_itens').select('*')
+          .order('numos', { ascending: true })
+          .range(from, from + page - 1);
+        if (res.error) throw res.error;
+        var rows = res.data || [];
+        out = out.concat(rows);
+        if (rows.length < page) break;
+        from += page;
+      }
+      state.list.itens = out.map(function (r) {
+        return {
+          numos: String(r.numos || ''),
+          itemId: r.item_id || '',
+          codserv: r.codserv == null ? '' : String(r.codserv),
+          descricao: r.descricao || '',
+          local: r.local || '',
+          regional: r.regional || '',
+          solicitacao: r.solicitacao || '',
+          solicitacaoISO: r.solicitacao_iso || '',
+          status: r.status_origem || '',
+          telefone: r.telefone || '',
+          primeiraVersao: r.data_primeira_versao || '',
+          primeiraVersaoEm: r.primeira_versao_em || '',
+          modificadoEm: r.modificado_em || '',
+          atualizadoEm: r.atualizado_em || '',
+        };
+      });
+      var maxAt = '';
+      state.list.itens.forEach(function (r) {
+        if (r.atualizadoEm && r.atualizadoEm > maxAt) maxAt = r.atualizadoEm;
+      });
+      state.list.meta = out.length ? { atualizadoEm: maxAt, total: out.length } : null;
+      return true;
+    } catch (e) {
+      state.list.itens = [];
+      state.list.meta = null;
+      if (!silencioso) {
+        alert('Não consegui ler a LIST conectada: ' + ((e && e.message) || e) +
+          '\n\nConfira se rodou docs/CONEXAO_LIST.sql no Supabase.');
+      }
+      return false;
+    } finally {
+      state.list.carregando = false;
+      renderListStatus();
+      renderList();
+    }
+  }
+
+  function renderTokenList() {
+    var box = $('list-token-box');
+    if (!box) return;
+    if (!state.list.token) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    box.style.display = '';
+    box.innerHTML =
+      '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
+      '<b>Token de conexão:</b>' +
+      '<code style="user-select:all">' + esc(state.list.token.token) + '</code>' +
+      '<button class="btn-small" id="list-copy-token">Copiar token</button>' +
+      '<button class="btn-small" id="list-revoke-tokens">Revogar tokens</button>' +
+      '</div>' +
+      '<div style="margin-top:8px">Válido até <b>' + esc(dataHoraBr(state.list.token.expiraEm)) +
+      '</b>. Abra a lista no SharePoint e clique no favorito <b>Conector LIST</b>; cole este token quando ele pedir.</div>';
+    var cp = $('list-copy-token');
+    if (cp) cp.addEventListener('click', function () {
+      var t = state.list.token && state.list.token.token;
+      if (!t) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(function () {
+          cp.textContent = 'Copiado!';
+          setTimeout(function () { cp.textContent = 'Copiar token'; }, 1500);
+        }, function () { window.prompt('Copie o token:', t); });
+      } else {
+        window.prompt('Copie o token:', t);
+      }
+    });
+    var rv = $('list-revoke-tokens');
+    if (rv) rv.addEventListener('click', function () {
+      if (!confirm('Revogar todos os tokens de conexão? O conector precisará de um novo.')) return;
+      supa().from('list_conexao_tokens').delete().not('token', 'is', null).then(function (r) {
+        if (r && r.error) { alert('Falha ao revogar: ' + r.error.message); return; }
+        state.list.token = null;
+        renderTokenList();
+        alert('Tokens revogados. Gere um novo quando precisar.');
+      });
+    });
+  }
+
+  async function gerarTokenList() {
+    if (typeof isSupabaseMode !== 'function' || !isSupabaseMode()) {
+      alert('Supabase não configurado.');
+      return;
+    }
+    var token = uuidV4();
+    var expira = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+    try {
+      // Limpa tokens vencidos (higiene; não afeta tokens válidos).
+      try { await supa().from('list_conexao_tokens').delete().lt('expira_em', new Date().toISOString()); } catch (eT) {}
+      var res = await supa().from('list_conexao_tokens')
+        .insert({ token: token, expira_em: expira, criado_por: (state.user && state.user.id) || null })
+        .select('token,expira_em')
+        .single();
+      if (res.error) throw res.error;
+      state.list.token = { token: token, expiraEm: expira };
+      renderTokenList();
+    } catch (e) {
+      alert('Não consegui gerar o token: ' + ((e && e.message) || e) +
+        '\n\nRode docs/CONEXAO_LIST.sql no Supabase (tabela list_conexao_tokens).');
+    }
+  }
+
+  function usarListNaComparacao() {
+    if (!state.list.itens.length) {
+      alert('Nenhum item conectado. Gere o token e rode o Conector LIST primeiro.');
+      return;
+    }
+    var rows = state.list.itens.map(function (r) {
+      return {
+        OS: r.numos,
+        'Código de Serviço': r.codserv,
+        'Descrição do Serviço': r.descricao,
+        Local: r.local,
+        Regional: r.regional,
+        'Solicitação': r.solicitacao || r.solicitacaoISO,
+        Status: r.status,
+        'Telefone Cliente': r.telefone,
+        PrimeiraVersao: r.primeiraVersao,
+      };
+    });
+    var headers = Object.keys(rows[0]);
+    var rl = sanitizeList(rows, headers);
+    state.listRaw = rows;
+    state.listClean = rl.clean;
+    state.listFile = { name: 'LIST conectada (SharePoint)', size: 0 };
+    var el = $('st-file-li');
+    if (el) {
+      el.textContent = 'LIST conectada: ' + rl.clean.length + ' OS válidas' +
+        (state.list.meta && state.list.meta.atualizadoEm ? ' · atualizada em ' + dataHoraBr(state.list.meta.atualizadoEm) : '') + '.';
+      el.className = 'upload-status ok';
+    }
+    appendLog(rl.log.join('\n'));
+    buildCodservOptions();
+    var bp = $('btn-process');
+    if (bp) bp.disabled = !(state.siateClean.length && state.listClean.length);
+    renderStats();
+    showView('importar');
+    alert('LIST conectada aplicada na comparação: ' + rl.clean.length + ' OS.\nAgora ajuste os filtros e clique em “Comparar bases”.');
+  }
+
+  function exportListCSV() {
+    var rows = listFiltrada();
+    if (!rows.length) { alert('Nada para exportar com os filtros atuais.'); return; }
+    var cols = ['OS', 'PRIMEIRA VERSAO', 'ULTIMA MODIFICACAO', 'CODSERV', 'DESCRICAO', 'LOCAL', 'REGIONAL', 'SOLICITACAO', 'STATUS', 'TELEFONE'];
+    function cell(v) {
+      v = String(v == null ? '' : v);
+      return (/[";\n\r]/.test(v)) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    }
+    var txt = '\uFEFF' + cols.join(';') + '\r\n' + rows.map(function (r) {
+      return [
+        r.numos, isoToBr(r.primeiraVersao), r.modificadoEm ? dataHoraBr(r.modificadoEm) : '',
+        r.codserv, r.descricao, r.local, r.regional, r.solicitacao, r.status, r.telefone,
+      ].map(cell).join(';');
+    }).join('\r\n');
+    var d = new Date(), p = function (n) { return String(n).padStart(2, '0'); };
+    downloadBlob(new Blob([txt], { type: 'text/csv;charset=utf-8' }),
+      'list_sharepoint_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.csv');
+  }
+
+  function limparListBase() {
+    if (!state.list.itens.length) return;
+    if (!confirm('Apagar a base LIST conectada (' + state.list.itens.length + ' itens)?\nA próxima execução do conector repõe tudo.')) return;
+    supa().from('list_itens').delete().neq('numos', '').then(function (r) {
+      if (r && r.error) { alert('Falha ao limpar: ' + r.error.message); return; }
+      carregarListConexao(true);
+    });
+  }
+
   function applySearch() {
     state.search = ($('q') || {}).value || '';
     state.pagePrincipal = 1; state.pageQuar = 1;
@@ -2666,6 +3044,82 @@
 
   // ---------- eventos ----------
   function bindEvents() {
+    // LIST conectada (SharePoint → Supabase)
+    ['l-q', 'l-reg', 'l-status'].forEach(function (id) {
+      var el = $(id);
+      var chave = id === 'l-q' ? 'q' : (id === 'l-reg' ? 'reg' : 'status');
+      if (el) el.addEventListener('input', function () {
+        state.list.filtro[chave] = el.value;
+        state.list.page = 1;
+        renderList();
+      });
+    });
+    var los = $('l-os');
+    if (los) los.addEventListener('input', function () {
+      var tinha = String(state.list.filtro.os || '').trim();
+      state.list.filtro.os = los.value;
+      // Ao colar uma lista pela primeira vez, mostra na ordem colada.
+      if (!tinha && los.value.trim() && state.list.filtro.sort === 'pv-asc') {
+        state.list.filtro.sort = 'os-lista';
+        if (lsort) lsort.value = 'os-lista';
+      } else if (!los.value.trim() && state.list.filtro.sort === 'os-lista') {
+        state.list.filtro.sort = 'pv-asc';
+        if (lsort) lsort.value = 'pv-asc';
+      }
+      state.list.page = 1;
+      renderList();
+    });
+    var semPill = $('l-semdata-pill');
+    if (semPill) semPill.addEventListener('click', function () {
+      setTimeout(function () {
+        var inp = semPill.querySelector('input');
+        state.list.filtro.semData = !!(inp && inp.checked);
+        state.list.page = 1;
+        renderList();
+      }, 0);
+    });
+    ['l-dini', 'l-dfim'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.addEventListener('change', function () {
+        state.list.filtro[id === 'l-dini' ? 'dini' : 'dfim'] = el.value;
+        state.list.page = 1;
+        renderList();
+      });
+    });
+    var lsort = $('l-sort');
+    if (lsort) lsort.addEventListener('change', function () {
+      state.list.filtro.sort = lsort.value;
+      state.list.page = 1;
+      renderList();
+    });
+    var llimpar = $('l-limparfiltros');
+    if (llimpar) llimpar.addEventListener('click', function () {
+      state.list.filtro = { q: '', os: '', reg: '', status: '', dini: '', dfim: '', semData: false, sort: 'pv-asc' };
+      state.list.page = 1;
+      ['l-q', 'l-os', 'l-reg', 'l-status', 'l-dini', 'l-dfim'].forEach(function (id) {
+        var el = $(id); if (el) el.value = '';
+      });
+      if (lsort) lsort.value = 'pv-asc';
+      var semInp = $('l-semdata');
+      if (semInp) semInp.checked = false;
+      var semPill2 = $('l-semdata-pill');
+      if (semPill2) semPill2.classList.remove('on');
+      renderList();
+    });
+    var ltok = $('btn-list-token');
+    if (ltok) ltok.addEventListener('click', gerarTokenList);
+    var lref = $('btn-list-refresh');
+    if (lref) lref.addEventListener('click', function () {
+      lref.disabled = true;
+      carregarListConexao(false).then(function () { lref.disabled = false; });
+    });
+    var luse = $('btn-list-usar');
+    if (luse) luse.addEventListener('click', usarListNaComparacao);
+    var llim = $('btn-list-limpar');
+    if (llim) llim.addEventListener('click', limparListBase);
+    var lexp = $('l-export');
+    if (lexp) lexp.addEventListener('click', exportListCSV);
+
     document.querySelectorAll('.chip[data-st]').forEach(function (c) {
       c.addEventListener('click', function () { state.statusFilter = c.getAttribute('data-st'); state.pagePrincipal = 1; renderAll(); });
     });
@@ -2991,6 +3445,9 @@
       if (pg === 'd-next') { state.pageDesp++; renderDespachados(); }
       if (pg === 'o-prev' && state.pageOco > 1) { state.pageOco--; renderOcorrencias(); }
       if (pg === 'o-next') { state.pageOco++; renderOcorrencias(); }
+      var lpg = e.target.getAttribute && e.target.getAttribute('data-lpg');
+      if (lpg === 'prev' && state.list.page > 1) { state.list.page--; renderList(); }
+      if (lpg === 'next') { state.list.page++; renderList(); }
 
       var btn = e.target.closest ? e.target.closest('[data-act]') : null;
       if (!btn) return;
@@ -3519,6 +3976,9 @@
     window.SADshow = function (v) { showView(v); };
     bindEvents();
     syncCaixaFilterInputs();
+    if (state.isAdmin) {
+      try { carregarListConexao(true); } catch (eL) {}
+    }
     var welcome = '';
     if (!state.isAdmin && state.user && state.user.email) {
       try {

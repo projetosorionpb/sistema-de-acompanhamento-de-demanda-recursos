@@ -25,6 +25,7 @@ Campos SIATE que importam: `CODSERV`, `NUMOS`, `DATASOL`, `CODREG` (1=LESTE, 2=C
 
 Banco e login são **somente Supabase** (nuvem). Antes de rodar, siga `docs/DEPLOY_SUPABASE.md`:
 criar projeto, rodar o SQL e preencher `js/config.js`.
+Para usar a **LIST conectada** (admin, sem CSV), rode também `docs/CONEXAO_LIST.sql`.
 
 ```bat
 cd D:\projetos\sistema-de-acompanhamento-de-demanda-recursos
@@ -39,6 +40,8 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 **Regra dos filtros da comparação:** cada planilha é filtrada por regional, serviço, cidade e data. O conjunto comparado é a união dos NUMOS que passaram em pelo menos uma base; para esses NUMOS, o sistema traz também o registro correspondente da outra planilha para identificar conflitos de CODSERV. Se nenhum dos lados passar nos filtros, a OS fica fora da comparação, quarentena e banco. Com filtro de data ativo, linha sem data válida não passa.
 
 ## Novidades
+
+- **LIST conectada (admin):** tela **LIST** mostra os itens do SharePoint com a **data da 1ª versão**, última modificação e filtros — inclusive **filtrar várias OS de uma vez colando a lista** (vírgula, espaço ou uma por linha), com contagem de encontradas/não encontradas. Sem upload de CSV: um conector roda na página da lista e grava no Supabase (`docs/CONEXAO_LIST.sql`); a base entra na comparação pelo botão **Usar na comparação**.
 
 - **Quarentena em massa (admin):** Aprovar filtrados → caixa, Apagar filtrados, Apagar TUDO (dupla confirmação; arquiva como reprovada p/ não voltar; caixa nunca é tocada).
 - **Duplicadas na importação:** OS congruente que **já está na caixa** vai para a quarentena como **JÁ NA CAIXA** para o admin revisar (opção “Já está na caixa → quarentena”, pode desmarcar para só ignorar).
@@ -66,8 +69,10 @@ Fluxo admin: subir SIATE + LIST → ajustar **filtros** (regional, codserv, cida
 ├── js/config.js        # SUPABASE_URL + ANON_KEY (obrigatório)
 ├── js/app.js           # parse SheetJS, sanitiza, compara NUMOS, caixa, quarentena
 ├── BASE/               # bases de exemplo (locais; fora do Git/deploy)
+├── automacao/          # conector LIST (SharePoint) + bookmarklets
 ├── docs/BRIEFING.md
 ├── docs/SUPABASE_SCHEMA.sql  # tabelas produtivas
+├── docs/CONEXAO_LIST.sql     # LIST conectada (admin, sem CSV)
 └── data/               # (legado) usar BASE/
 ```
 
