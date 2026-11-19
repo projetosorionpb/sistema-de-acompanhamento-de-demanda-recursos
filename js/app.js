@@ -129,6 +129,13 @@
   function isMine(p) {
     return !!(p.responsavel && String(p.responsavel).toLowerCase() === meEmail());
   }
+  // Dono efetivo da OS: em OS finalizada vale quem encerrou/despachou (o crédito
+  // da ação). Sem isso, uma OS encerrada sem responsável aparecia como "—".
+  function ownerOf(p) {
+    if (p.statusDemanda === 'ENCERRADO') return p.encerradoPor || p.responsavel || '';
+    if (p.statusDemanda === 'DESPACHADO') return p.despachadoPor || p.responsavel || '';
+    return p.responsavel || '';
+  }
   // Dia local YYYY-MM-DD (métrica "encerradas hoje")
   function dayKey(iso) {
     try {
@@ -1032,12 +1039,13 @@
     var q = String(state.encSearch || '').trim().toUpperCase();
     var out = db.principal.filter(function (p) {
       if (p.statusDemanda !== 'ENCERRADO') return false;
-      if (!state.isAdmin && !isMine(p)) return false;
+      if (!state.isAdmin && String(ownerOf(p)).toLowerCase() !== meEmail()) return false;
       if (!q) return true;
       return String(p.numos).indexOf(q) !== -1 ||
         String(p.cliente || '').toUpperCase().indexOf(q) !== -1 ||
         String(p.cidade || '').toUpperCase().indexOf(q) !== -1 ||
         String(p.codserv || '').indexOf(q) !== -1 ||
+        String(p.encerradoPor || '').toUpperCase().indexOf(q) !== -1 ||
         String(p.responsavel || '').toUpperCase().indexOf(q) !== -1;
     });
     return sortPrincipal(out, state.sort.key);
@@ -1068,7 +1076,7 @@
           '<td class="mono">' + esc(p.dataISO || p.datasol || '—') + '</td>' +
           '<td>' + esc(p.cidade || '—') + '</td>' +
           '<td>' + esc(p.cliente || '—') + '</td>' +
-          (state.isAdmin ? '<td class="mono">' + esc(p.responsavel || '—') + '</td>' : '') +
+          (state.isAdmin ? '<td class="mono">' + esc(ownerOf(p) || '—') + '</td>' : '') +
           '<td class="mono">' + esc(p.encerradoEm ? String(p.encerradoEm).slice(0, 10) : '—') + '</td>' +
           '</tr>';
       });
@@ -1979,11 +1987,7 @@
     else { ini = tk; fim = tk; }
     return { ini: ini, fim: fim };
   }
-  function mOwner(p) {
-    if (p.statusDemanda === 'ENCERRADO') return p.encerradoPor || p.responsavel || '';
-    if (p.statusDemanda === 'DESPACHADO') return p.despachadoPor || p.responsavel || '';
-    return p.responsavel || '';
-  }
+  function mOwner(p) { return ownerOf(p); }
   function mEventDay(p) {
     if (p.statusDemanda === 'ENCERRADO') return dayKey(p.encerradoEm);
     if (p.statusDemanda === 'DESPACHADO') return dayKey(p.despachadoEm);
@@ -4001,8 +4005,9 @@
       if (!state.isAdmin && p.responsavel && !isMine(p)) { alert('Essa OS está com outro usuário.'); renderAll(); return; }
       var novo = s.value;
       function aplicar(motivo) {
-        // Despachar uma OS disponível implica assumi-la (senão sairia da caixa sem dono).
-        if (novo === 'DESPACHADO' && !state.isAdmin && !p.responsavel) {
+        // Encerrar/despachar uma OS disponível implica assumi-la (senão sairia
+        // da caixa finalizada sem dono e o responsável apareceria como "—").
+        if ((novo === 'DESPACHADO' || novo === 'ENCERRADO') && !state.isAdmin && !p.responsavel) {
           p.responsavel = (state.user && state.user.email) || 'eu';
         }
         p.statusDemanda = novo;
