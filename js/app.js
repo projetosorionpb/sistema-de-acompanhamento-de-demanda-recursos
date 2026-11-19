@@ -4005,9 +4005,10 @@
       if (!state.isAdmin && p.responsavel && !isMine(p)) { alert('Essa OS está com outro usuário.'); renderAll(); return; }
       var novo = s.value;
       function aplicar(motivo) {
-        // Encerrar/despachar uma OS disponível implica assumi-la (senão sairia
-        // da caixa finalizada sem dono e o responsável apareceria como "—").
-        if ((novo === 'DESPACHADO' || novo === 'ENCERRADO') && !state.isAdmin && !p.responsavel) {
+        // Mudar o status de uma OS disponível implica assumi-la (senão ela
+        // sairia da caixa sem dono — foi o que deixava o responsável como "—"
+        // em Encerrados/Ocorrências). "A INICIAR" é o estado do pool, mantém sem dono.
+        if (!state.isAdmin && !p.responsavel && novo !== 'A INICIAR') {
           p.responsavel = (state.user && state.user.email) || 'eu';
         }
         p.statusDemanda = novo;
